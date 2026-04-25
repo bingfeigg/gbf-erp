@@ -1,0 +1,7 @@
+# 仅分析应用源码，加快扫描、减少误报范围
+name: gbf-erp
+paths:
+  - src
+paths-ignore:
+  - "**/node_modules/**"
+  - "**/dist/**"

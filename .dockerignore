@@ -1,0 +1,7 @@
+node_modules
+dist
+erp.db
+npm-debug.log
+.git
+.gitignore
+terminals

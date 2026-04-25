@@ -1,0 +1,22 @@
+services:
+  gbf-erp:
+    build: .
+    container_name: gbf-erp
+    ports:
+      - "3100:3100"
+    environment:
+      PORT: "3100"
+      # 镜像内 NODE_ENV=production，JWT_SECRET 须 >=32 字符；生产请换为 openssl rand -hex 32
+      JWT_SECRET: "local-docker-jwt-secret-minimum-32-characters-required"
+    volumes:
+      - ./data:/app/data
+    mem_limit: 1g
+    cpus: 1.0
+    # 使用 Dockerfile 的 ENTRYPOINT：先 migrate，再启动 node dist/index.js
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3100/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 25s
+    restart: unless-stopped

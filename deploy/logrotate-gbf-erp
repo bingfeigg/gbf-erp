@@ -1,0 +1,9 @@
+/var/log/gbf-erp/*.log {
+  daily
+  rotate 14
+  compress
+  copytruncate
+  missingok
+  notifempty
+  create 0640 www-data www-data
+}

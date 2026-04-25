@@ -1,0 +1,46 @@
+name: CI
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "*.md"
+      - "**/*.md"
+      - LICENSE
+      - docs/**
+  pull_request:
+    paths-ignore:
+      - "*.md"
+      - "**/*.md"
+      - LICENSE
+      - docs/**
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: npm audit (high or higher)
+        run: npm audit --audit-level=high
+
+      - name: Build, migrate, smoke and e2e
+        run: npm run verify

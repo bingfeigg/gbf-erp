@@ -1,0 +1,51 @@
+{
+  "name": "gbf-erp",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Generic trading ERP MVP backend",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "main": "dist/index.js",
+  "scripts": {
+    "rebuild:native": "npm rebuild better-sqlite3",
+    "predev": "bash scripts/check-node.sh",
+    "premigrate": "bash scripts/check-node.sh",
+    "prestart": "bash scripts/check-node.sh",
+    "preverify": "bash scripts/check-node.sh",
+    "test": "find src -name '*.test.ts' -exec npx --no-install tsx --test {} +",
+    "openapi:validate": "swagger-cli validate openapi/openapi.yaml",
+    "build": "tsc -p tsconfig.json",
+    "migrate": "tsx src/migrate.ts",
+    "dev": "tsx src/index.ts",
+    "free:4000": "bash scripts/free-port.sh 4000",
+    "free:3100": "bash scripts/free-port.sh 3100",
+    "dev:4000": "npm run free:4000 && PORT=4000 tsx src/index.ts",
+    "start": "node dist/index.js",
+    "start:fresh": "npm run free:3100 && npm run start",
+    "smoke": "bash scripts/smoke.sh",
+    "e2e": "bash scripts/e2e.sh",
+    "verify": "bash scripts/verify-local.sh",
+    "docker:build": "docker compose build",
+    "docker:test": "bash scripts/docker-smoke.sh",
+    "deploy": "bash scripts/deploy.sh",
+    "validate:env": "bash scripts/validate-env.sh",
+    "dr:drill": "bash scripts/dr-drill.sh",
+    "rollback": "bash scripts/rollback.sh"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@apidevtools/swagger-cli": "^4.0.4",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}

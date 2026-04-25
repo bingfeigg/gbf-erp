@@ -1,0 +1,987 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GBF ERP 控制台</title>
+    <style>
+      :root {
+        --bg: #0b1424;
+        --bg-soft: #111d33;
+        --glass: rgba(255, 255, 255, 0.05);
+        --glass-border: rgba(255, 255, 255, 0.12);
+        --text-main: #e8eefc;
+        --text-sub: #9fb0d8;
+        --brand: #4f8cff;
+        --brand-strong: #3a79f7;
+        --danger: #ff7a8a;
+        --danger-strong: #ff4f68;
+        --ok: #36d399;
+        --warn: #fbbf24;
+      }
+      * { box-sizing: border-box; }
+      body {
+        font-family: "Inter", "Segoe UI", Arial, sans-serif;
+        margin: 0;
+        color: var(--text-main);
+        background:
+          radial-gradient(circle at 8% 6%, #1b325f 0%, transparent 32%),
+          linear-gradient(160deg, #081121 0%, #0c172b 55%, #0a1426 100%);
+        min-height: 100vh;
+      }
+      .hidden { display: none !important; }
+      .login-shell {
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 20px;
+      }
+      .login-card {
+        width: min(460px, 96vw);
+        background: var(--glass);
+        border: 1px solid var(--glass-border);
+        border-radius: 14px;
+        padding: 18px;
+        box-shadow: 0 10px 30px rgba(0,0,0,.3);
+        backdrop-filter: blur(8px);
+      }
+      .login-card h2 {
+        margin: 0 0 6px;
+        font-size: 20px;
+      }
+      .login-card p {
+        margin: 0 0 10px;
+      }
+      .wrap { max-width: 1600px; margin: 12px auto; padding: 0 14px 14px; }
+      h1 { margin: 0 0 4px; font-size: 26px; letter-spacing: .2px; }
+      .hero {
+        margin-bottom: 10px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: 1px solid rgba(255,255,255,.12);
+        background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+      }
+      .hero-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .hero-head h1 {
+        margin: 0;
+      }
+      .hero small { color: var(--text-sub); font-size: 13px; }
+      .card {
+        background: var(--glass);
+        border: 1px solid var(--glass-border);
+        border-radius: 12px;
+        padding: 10px;
+        backdrop-filter: blur(6px);
+        box-shadow: 0 6px 18px rgba(0,0,0,.22);
+      }
+      .layout { display: grid; grid-template-columns: 312px minmax(0,1fr); gap: 12px; align-items: start; }
+      .left-col { position: sticky; top: 10px; display: grid; gap: 12px; }
+      .right-col { display: grid; gap: 12px; min-width: 0; }
+      .quickbar {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding: 2px 2px 8px;
+        margin-bottom: 10px;
+        position: sticky;
+        top: 8px;
+        z-index: 30;
+        backdrop-filter: blur(10px);
+      }
+      .quickbar .label {
+        font-size: 12px;
+        color: #9fb0d8;
+        white-space: nowrap;
+        margin-right: 2px;
+      }
+      .quickbar button { white-space: nowrap; }
+      .section-title { margin: 0 0 8px; font-size: 15px; color: #dbe7ff; }
+      .row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+      input, button {
+        padding: 8px 10px;
+        border: 1px solid rgba(255,255,255,.2);
+        border-radius: 8px;
+        font-size: 13px;
+      }
+      select {
+        padding: 8px 10px;
+        border: 1px solid rgba(255,255,255,.2);
+        border-radius: 8px;
+        font-size: 13px;
+        background: rgba(255,255,255,.06);
+        color: var(--text-main);
+        min-height: 36px;
+        appearance: none;
+      }
+      select.placeholder {
+        color: #8fa3cb;
+        font-weight: 500;
+      }
+      select.required-empty {
+        border-color: rgba(251, 191, 36, 0.8);
+        box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.18) inset;
+      }
+      select.has-value {
+        color: #eef4ff;
+        font-weight: 600;
+        border-color: rgba(54, 211, 153, 0.75);
+        box-shadow: 0 0 0 1px rgba(54, 211, 153, 0.15) inset;
+      }
+      select:focus {
+        outline: none;
+        border-color: rgba(120,170,255,.9);
+        box-shadow: 0 0 0 2px rgba(95,149,255,.22);
+      }
+      select option {
+        color: #e8eefc;
+        background: #16243d;
+      }
+      input {
+        flex: 1;
+        min-width: 120px;
+        background: rgba(255,255,255,.06);
+        color: var(--text-main);
+      }
+      input::placeholder { color: #8da1cb; }
+      button {
+        cursor: pointer;
+        background: var(--brand);
+        border-color: rgba(255,255,255,.12);
+        color: #fff;
+        font-weight: 600;
+        min-height: 36px;
+        transition: transform .1s ease, box-shadow .18s ease, opacity .2s ease, background .2s ease;
+      }
+      button:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(60,122,247,.3); }
+      button:active { transform: translateY(0); }
+      button.secondary { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.2); }
+      button.ghost { background: rgba(255,255,255,.06); color: #c8d7ff; border-color: rgba(255,255,255,.22); }
+      button.danger {
+        background: linear-gradient(180deg, var(--danger), var(--danger-strong));
+        border-color: transparent;
+        color: #fff;
+      }
+      button.tab.active {
+        background: linear-gradient(180deg, #8bb8ff, #5f95ff);
+        color: #fff;
+        border-color: transparent;
+        box-shadow: 0 8px 20px rgba(110,168,255,.35);
+      }
+      pre {
+        background: #030916;
+        color: #d7e2ff;
+        border-radius: 10px;
+        border: 1px solid rgba(255,255,255,.12);
+        padding: 10px;
+        overflow: auto;
+        min-height: 110px;
+        max-height: 220px;
+      }
+      #approvalDetail {
+        white-space: pre-wrap;
+        overflow-wrap: break-word;
+        word-break: normal;
+        max-width: 100%;
+        line-height: 1.5;
+        font-size: 13px;
+      }
+      .ok { color: var(--ok); font-weight: bold; }
+      .warn { color: var(--warn); font-weight: bold; }
+      small { color: var(--text-sub); }
+      .muted { color: #96a8cf; font-size: 12px; }
+      .kpi { display: grid; grid-template-columns: repeat(4,minmax(170px,1fr)); gap: 10px; margin-bottom: 14px; }
+      .kpi-item {
+        background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.05));
+        border: 1px solid rgba(255,255,255,.14);
+        border-radius: 10px;
+        padding: 10px;
+      }
+      .kpi-item .label { color: #9eb1d7; font-size: 12px; }
+      .kpi-item .value { font-size: 24px; font-weight: 700; margin-top: 6px; color: #ffffff; }
+      .kpi-item .kpi-sub { margin-top: 4px; line-height: 1.35; }
+      .tabs {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 12px;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding-bottom: 4px;
+        scrollbar-width: thin;
+        position: sticky;
+        top: 64px;
+        z-index: 20;
+        background: linear-gradient(180deg, rgba(11, 21, 40, 0.98), rgba(11, 21, 40, 0.9));
+        border: 1px solid rgba(255,255,255,.1);
+        border-radius: 8px;
+        padding: 6px;
+      }
+      .tabs button { white-space: nowrap; }
+      .tabs button.tab.active::after {
+        content: "";
+        display: block;
+        height: 2px;
+        margin-top: 4px;
+        border-radius: 2px;
+        background: rgba(255,255,255,.9);
+      }
+      .ops-grid { display: grid; gap: 8px; grid-template-columns: 1fr; }
+      .ops-grid .row { margin-bottom: 0; }
+      .ops-grid button { flex: 1; min-width: 126px; min-height: 36px; }
+      .biz-action-buttons {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+      .biz-action-buttons button {
+        width: 100%;
+      }
+      #panelApproval .row > button,
+      #panelApproval .row > select {
+        min-width: 120px;
+      }
+      #panelApproval .row > select {
+        flex: 0 0 auto;
+      }
+      .ops-group {
+        border: 1px solid rgba(255,255,255,.12);
+        border-radius: 8px;
+        padding: 8px;
+        background: rgba(255,255,255,.03);
+      }
+      .ops-group-title {
+        margin: 0 0 6px;
+        font-size: 12px;
+        color: #b8caef;
+        letter-spacing: .2px;
+      }
+      .ops-param-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+      #bizParamGrid {
+        grid-template-columns: 1fr;
+      }
+      #bizParamGrid .ops-param-card {
+        padding: 6px;
+      }
+      #bizParamGrid .param-card-fold .ops-fields {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: flex-end;
+      }
+      #bizParamGrid .ops-field {
+        gap: 2px;
+      }
+      #bizParamGrid .ops-field-action {
+        align-self: end;
+      }
+      #bizParamGrid .ops-field-action label {
+        visibility: hidden;
+      }
+      #bizParamGrid .ops-field label {
+        font-size: 10px;
+        line-height: 1.1;
+      }
+      #bizParamGrid .ops-field label.has-chip {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      #bizParamGrid .select-chip {
+        display: none;
+        font-size: 10px;
+        line-height: 1;
+        padding: 2px 6px;
+        border-radius: 999px;
+        color: #dff6ea;
+        background: rgba(54, 211, 153, 0.22);
+        border: 1px solid rgba(54, 211, 153, 0.55);
+      }
+      #bizParamGrid .select-chip::before {
+        content: "";
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #36d399;
+        display: inline-block;
+        margin-right: 4px;
+        vertical-align: middle;
+      }
+      #bizParamGrid .select-chip.visible {
+        display: inline-block;
+      }
+      #bizParamGrid .ops-field-action button {
+        width: auto;
+        min-width: 64px;
+        padding: 8px 10px;
+        justify-self: end;
+      }
+      #bizParamGrid .ops-field.field-wide { flex: 2 1 170px; min-width: 150px; }
+      #bizParamGrid .ops-field.field-mid { flex: 1.2 1 120px; min-width: 104px; }
+      #bizParamGrid .ops-field.field-narrow { flex: 0.8 1 82px; min-width: 72px; }
+      #bizParamGrid .ops-field.ops-field-action { flex: 0 0 72px; }
+      #bizParamGrid .ops-fields {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .ops-param-card {
+        border: 1px solid rgba(255,255,255,.1);
+        border-radius: 8px;
+        padding: 7px;
+        background: rgba(255,255,255,.02);
+      }
+      .ops-param-title {
+        margin: 0;
+        font-size: 12px;
+        color: #c8d9fb;
+      }
+      .param-card-fold summary {
+        cursor: pointer;
+        list-style: none;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 2px 0;
+        user-select: none;
+      }
+      .param-card-fold summary::-webkit-details-marker { display: none; }
+      .param-card-fold summary::after {
+        content: "展开";
+        font-size: 11px;
+        color: #9fb1d8;
+      }
+      .param-card-fold[open] summary::after { content: "收起"; }
+      .param-card-fold .ops-fields { margin-top: 6px; }
+      .ops-fields {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
+      }
+      .ops-field {
+        display: grid;
+        gap: 3px;
+      }
+      .ops-field label {
+        font-size: 11px;
+        color: #9fb1d8;
+        line-height: 1.2;
+      }
+      .ops-field input {
+        min-width: 0;
+        width: 100%;
+      }
+      .ops-step {
+        margin: 0 0 6px;
+        font-size: 12px;
+        color: #98add8;
+      }
+      .ops-note { padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); }
+      .module-nav {
+        display: grid;
+        gap: 6px;
+      }
+      .module-quick {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid rgba(255,255,255,.12);
+        display: grid;
+        gap: 6px;
+      }
+      .module-identity {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid rgba(255,255,255,.12);
+      }
+      .module-quick .title {
+        font-size: 12px;
+        color: #9fb1d8;
+      }
+      .module-nav button {
+        width: 100%;
+        text-align: left;
+        justify-content: flex-start;
+        background: rgba(255,255,255,.06);
+        border-color: rgba(255,255,255,.18);
+        color: #dce7ff;
+      }
+      .module-nav button.nav-active {
+        background: linear-gradient(180deg, #5f95ff, #4f8cff);
+        color: #fff;
+        border-color: transparent;
+      }
+      .ops-user-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+      .ops-checkrow {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 2px;
+        margin-top: 2px;
+      }
+      .ops-checklabel {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        cursor: pointer;
+        line-height: 1.35;
+        white-space: nowrap;
+      }
+      .ops-checklabel input[type="checkbox"] {
+        margin: 0;
+        width: 15px;
+        height: 15px;
+        accent-color: #6ea8ff;
+        flex: 0 0 auto;
+      }
+      .fold {
+        border: 1px solid rgba(255,255,255,.14);
+        border-radius: 10px;
+        background: rgba(255,255,255,.03);
+      }
+      .fold > summary {
+        cursor: pointer;
+        padding: 10px;
+        font-size: 14px;
+        color: #dce7ff;
+        list-style: none;
+        user-select: none;
+      }
+      .fold > summary::-webkit-details-marker { display: none; }
+      .fold > summary::after {
+        content: "▾";
+        float: right;
+        color: #9db4e2;
+      }
+      .fold[open] > summary::after { content: "▴"; }
+      .fold-content { padding: 0 10px 10px; }
+      .panel { display: none; border-top: 1px solid rgba(255,255,255,.12); padding-top: 10px; }
+      .panel.active { display: block; animation: fadeIn .22s ease; }
+      @keyframes fadeIn { from { opacity: 0; transform: translateY(4px);} to { opacity: 1; transform: translateY(0);} }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      th, td { border-bottom: 1px solid rgba(255,255,255,.12); text-align: left; padding: 7px; }
+      tbody tr { transition: background .15s ease; }
+      tbody tr:hover { background: rgba(110, 168, 255, .10); }
+      tbody tr:nth-child(even) { background: rgba(255,255,255,.02); }
+      tbody tr.row-selected {
+        background: rgba(110, 168, 255, .22) !important;
+        outline: 1px solid rgba(140, 190, 255, .75);
+      }
+      th {
+        background: rgba(255,255,255,.06);
+        color: #bfd0f8;
+        position: sticky;
+        top: 0;
+      }
+      th.first-col {
+        left: 0;
+        z-index: 3;
+        min-width: 84px;
+        box-shadow: 2px 0 0 rgba(255,255,255,.08);
+      }
+      td.first-col {
+        position: sticky;
+        left: 0;
+        z-index: 2;
+        min-width: 84px;
+        background: rgba(8, 18, 40, .92);
+        box-shadow: 2px 0 0 rgba(255,255,255,.06);
+      }
+      th.th-amount { background: rgba(54, 211, 153, .16); color: #d8ffe8; }
+      th.th-status { background: rgba(251, 191, 36, .16); color: #ffefc2; }
+      th.th-time { background: rgba(110, 168, 255, .18); color: #d8e7ff; }
+      th.th-id { background: rgba(255,255,255,.08); color: #e5ecff; }
+      th.th-amount, td.td-amount {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      th.th-time, td.td-time {
+        min-width: 156px;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+      }
+      .table-wrap {
+        max-height: 520px;
+        overflow: auto;
+        border: 1px solid rgba(255,255,255,.12);
+        border-radius: 8px;
+        background: rgba(5, 12, 28, .56);
+      }
+      .pager { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+      .pager button { padding: 4px 8px; font-size: 12px; }
+      .drawer {
+        margin-top: 8px;
+        border: 1px solid rgba(255,255,255,.16);
+        border-radius: 10px;
+        padding: 8px;
+        background: rgba(0,0,0,.18);
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,.03);
+      }
+      .split {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 320px;
+        gap: 10px;
+        align-items: start;
+      }
+      .split-side {
+        position: sticky;
+        top: 8px;
+        display: grid;
+        gap: 8px;
+      }
+      .timeline { list-style: none; margin: 0; padding: 0; }
+      .timeline li { position: relative; padding-left: 20px; margin: 0 0 10px; color: #dbe7ff; }
+      .timeline li::before {
+        content: "";
+        position: absolute;
+        left: 2px;
+        top: 5px;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #6ea8ff;
+      }
+      .timeline li .meta { color: #9fb0d8; font-size: 12px; }
+      .logs { margin-top: 14px; }
+      .logs pre { max-height: 300px; min-height: 140px; }
+      .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+      .notif {
+        margin-bottom: 10px;
+        padding: 7px 10px;
+        border-radius: 8px;
+        border: 1px solid rgba(255,255,255,.16);
+        background: rgba(79, 140, 255, .12);
+        color: #dbe7ff;
+        font-size: 12px;
+      }
+      .trend {
+        display: grid;
+        gap: 8px;
+      }
+      .trend-row {
+        display: grid;
+        grid-template-columns: 110px 1fr 64px;
+        align-items: center;
+        gap: 8px;
+      }
+      .trend-bar {
+        height: 16px;
+        border-radius: 10px;
+        background: rgba(255,255,255,.08);
+        overflow: hidden;
+      }
+      .trend-fill {
+        height: 100%;
+        border-radius: 10px;
+        background: linear-gradient(90deg, #6ea8ff, #36d399);
+      }
+      @media (max-width: 1300px) {
+        .layout { grid-template-columns: 270px minmax(0,1fr); }
+        .kpi { grid-template-columns: repeat(2,minmax(130px,1fr)); }
+      }
+      @media (max-width: 1100px) {
+        .layout { grid-template-columns: 1fr; }
+        .left-col { position: static; }
+        .split { grid-template-columns: 1fr; }
+        .split-side { position: static; }
+        #bizParamGrid .ops-field.field-wide,
+        #bizParamGrid .ops-field.field-mid { flex: 1 1 45%; min-width: 130px; }
+        #bizParamGrid .ops-field.field-narrow { flex: 0 0 96px; min-width: 90px; }
+      }
+      @media (max-width: 760px) {
+        .wrap { padding: 0 12px 12px; margin: 12px auto; }
+        h1 { font-size: 24px; }
+        .kpi { grid-template-columns: 1fr 1fr; }
+        .row { gap: 6px; }
+        .biz-action-buttons { grid-template-columns: 1fr; }
+        .ops-fields { grid-template-columns: 1fr; }
+        #bizParamGrid .ops-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .ops-checklabel { white-space: normal; }
+        button, input, select { width: 100%; }
+        #bizParamGrid .ops-field.field-wide,
+        #bizParamGrid .ops-field.field-mid,
+        #bizParamGrid .ops-field.field-narrow,
+        #bizParamGrid .ops-field.ops-field-action { flex: initial; min-width: 0; }
+        #bizParamGrid .ops-field-action button { width: 100%; min-width: 64px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="loginScreen" class="login-shell">
+      <section class="login-card">
+        <h2>GBF ERP 登录</h2>
+        <p class="muted">请先登录后进入业务系统。</p>
+        <div class="row">
+          <input id="username" value="admin" placeholder="用户名" />
+          <input id="password" value="admin" type="password" placeholder="密码" />
+        </div>
+        <div class="row" style="margin-bottom:0;">
+          <button id="btnLogin">登录系统</button>
+        </div>
+        <div id="loginFormStatus" class="muted" style="margin-top:8px;">默认账号：admin / admin</div>
+      </section>
+    </div>
+
+    <div id="appShell" class="wrap hidden">
+      <div class="hero">
+        <div class="hero-head">
+          <h1>GBF ERP 智能控制台</h1>
+          <button class="secondary" id="btnSwitchAccount">切换账号</button>
+        </div>
+        <p><small>贸易与财务一体化驾驶舱：实时看板、流程操作、凭证联动。</small></p>
+        <div class="notif" id="notificationBar">通知：暂无新消息</div>
+        <div id="loginStatus" class="hidden">未登录</div>
+      </div>
+
+      <div class="kpi">
+        <div class="kpi-item"><div class="label">应收未收余额</div><div class="value" id="kpiAr">0</div></div>
+        <div class="kpi-item"><div class="label">应付未付余额</div><div class="value" id="kpiAp">0</div></div>
+        <div class="kpi-item">
+          <div class="label">库存总数量</div>
+          <div class="value" id="kpiStock">0</div>
+          <div class="muted kpi-sub" id="kpiStockValue">库存成本金额 —</div>
+        </div>
+        <div class="kpi-item"><div class="label">凭证条数</div><div class="value" id="kpiJe">0</div></div>
+      </div>
+      <div class="card" style="margin-bottom:10px;">
+        <div class="section-title">角色待办聚焦</div>
+        <div id="roleTodoHint" class="muted">登录后会根据角色自动生成关键待办。</div>
+        <ul id="roleTodoList" class="muted" style="margin:8px 0 0 18px;padding:0;line-height:1.6;"></ul>
+      </div>
+
+      <div class="layout">
+        <aside class="left-col">
+          <section class="card">
+            <details class="fold" open>
+              <summary>创建中心</summary>
+              <div class="fold-content">
+                <div id="bizActionButtons" class="biz-action-buttons">
+                  <button id="btnBizAddProduct">新增商品</button>
+                  <button id="btnBizPurchase">创建采购单</button>
+                  <button id="btnBizSales">创建销售单</button>
+                  <button id="btnBizReceipt">创建收款单</button>
+                  <button id="btnBizPayment">创建付款单</button>
+                </div>
+              </div>
+            </details>
+          </section>
+          <section class="card">
+            <details class="fold" open>
+              <summary>导航中心</summary>
+              <div class="fold-content">
+                <div class="module-nav">
+                  <button id="navCreate" data-panel="panelCreate" class="nav-active">单据&商品创建</button>
+                  <button id="navApproval" data-panel="panelApproval">审批工作台</button>
+                  <button id="navAr" data-panel="panelAr">应收管理</button>
+                  <button id="navAp" data-panel="panelAp">应付管理</button>
+                  <button id="navProducts" data-panel="panelProducts">商品库存</button>
+                  <button id="navJournals" data-panel="panelJournals">凭证中心</button>
+                  <button id="navTrend" data-panel="panelTrend">趋势图表</button>
+                  <button id="navAudit" data-panel="panelAudit">审计日志</button>
+                  <button id="navAlerts" data-panel="panelAlerts">告警事件</button>
+                </div>
+              </div>
+            </details>
+          </section>
+          <section class="card">
+            <details class="fold" open>
+              <summary>流程配置</summary>
+              <div class="fold-content">
+                <div id="devOpsSection" class="ops-grid">
+                  <div class="ops-group">
+                    <div class="ops-group-title">研发运维（仅研发账号）</div>
+                    <div class="ops-step">用于联调与回归验证：批量建数据、自动流程、参数化创建。</div>
+                    <div class="row"><button id="btnSeed">【基础】初始化主数据</button></div>
+                    <div class="row"><button id="btnPurchase">【订单】创建采购单</button><button id="btnSales">【订单】创建销售单</button></div>
+                    <div class="row ops-checkrow">
+                      <label class="muted ops-checklabel" for="chkAutoSubmitAfterCreate">
+                        <input type="checkbox" id="chkAutoSubmitAfterCreate" />
+                        <span>创建后自动提交</span>
+                      </label>
+                    </div>
+                  </div>
+                  <div class="ops-group">
+                    <div class="ops-group-title">资金动作（需单据审批后）</div>
+                    <div class="ops-step">收款（销售） / 付款（采购）</div>
+                    <div class="row"><button id="btnReceipt">【资金】创建收款单</button><button id="btnPayment">【资金】创建付款单</button></div>
+                  </div>
+                  <div class="ops-group">
+                    <div class="ops-group-title">执行与刷新</div>
+                    <div class="row"><button class="secondary" id="btnRefreshAll">【运维】刷新看板</button><button id="btnRunAll">一键执行业务流程</button></div>
+                  </div>
+                </div>
+                <div class="ops-note muted" style="margin-top:8px;">研发运维用于联调与回归；业务参数已移动到右侧主工作区，流程快捷入口在左侧导航。</div>
+              </div>
+            </details>
+          </section>
+        </aside>
+
+        <main class="right-col">
+          <section class="card">
+            <h3 class="section-title" id="currentModuleTitle">单据&商品创建</h3>
+            <section class="panel active" id="panelCreate">
+              <div id="bizParamsWorkbench" style="margin-bottom:10px;">
+              <div id="userOpsSection" class="ops-user-grid">
+                <div class="ops-group" id="bizParamsGroup">
+                  <div id="pickOptionHint" class="muted" style="margin-bottom:6px;font-size:12px;display:none;"></div>
+                  <div class="ops-param-grid" id="bizParamGrid">
+                  <div class="ops-param-card" id="paramCardPurchase">
+                    <details class="param-card-fold">
+                      <summary><div class="ops-param-title">采购单参数</div></summary>
+                      <div class="ops-fields">
+                      <div class="ops-field field-wide"><label for="poOrderNo">采购单号</label><input id="poOrderNo" placeholder="PO..." /></div>
+                      <div class="ops-field field-wide"><label class="has-chip" for="poSupplierPick">供应商 <span id="chipPoSupplierPick" class="select-chip">已选</span></label><select id="poSupplierPick"><option value="">选择供应商</option></select><div id="boxQuickAddSupplier" class="row" style="display:none;margin-top:4px;gap:6px;"><input id="inputQuickAddSupplierCode" placeholder="编码（可选）" style="max-width:120px;" /><input id="inputQuickAddSupplierName" placeholder="供应商名称" style="min-width:140px;" /><button type="button" id="btnConfirmQuickAddSupplier">确定</button><button type="button" class="secondary" id="btnCancelQuickAddSupplier">取消</button></div></div>
+                      <div class="ops-field field-wide"><label class="has-chip" for="poProductPick">商品 <span id="chipPoProductPick" class="select-chip">已选</span></label><select id="poProductPick"><option value="">选择商品</option></select></div>
+                      <input id="poProductId" type="hidden" />
+                      <div class="ops-field field-narrow"><label for="poQty">数量</label><input id="poQty" type="number" step="0.01" min="0.0001" placeholder="如 100" /></div>
+                      <div class="ops-field field-narrow"><label for="poPrice">单价</label><input id="poPrice" type="number" step="0.01" min="0" placeholder="如 10" /></div>
+                      <div class="ops-field ops-field-action"><label>操作</label><button id="btnConfirmPurchase">确定</button></div>
+                      </div>
+                      <div id="poAutoHint" class="muted" style="margin-top:6px;font-size:12px;"></div>
+                    </details>
+                  </div>
+                  <div class="ops-param-card" id="paramCardSales">
+                    <details class="param-card-fold">
+                      <summary><div class="ops-param-title">销售单参数</div></summary>
+                      <div class="ops-fields">
+                      <div class="ops-field field-wide"><label for="soOrderNo">销售单号</label><input id="soOrderNo" placeholder="SO..." /></div>
+                      <div class="ops-field field-wide"><label class="has-chip" for="soCustomerPick">客户 <span id="chipSoCustomerPick" class="select-chip">已选</span></label><select id="soCustomerPick"><option value="">选择客户</option></select><div id="boxQuickAddCustomerSales" class="row" style="display:none;margin-top:4px;gap:6px;"><input id="inputQuickAddCustomerSalesCode" placeholder="编码（可选）" style="max-width:120px;" /><input id="inputQuickAddCustomerSalesName" placeholder="客户名称" style="min-width:140px;" /><button type="button" id="btnConfirmQuickAddCustomerSales">确定</button><button type="button" class="secondary" id="btnCancelQuickAddCustomerSales">取消</button></div></div>
+                      <div class="ops-field field-wide"><label class="has-chip" for="soProductPick">商品 <span id="chipSoProductPick" class="select-chip">已选</span></label><select id="soProductPick"><option value="">选择商品</option></select></div>
+                      <input id="soProductId" type="hidden" />
+                      <div class="ops-field field-narrow"><label for="soQty">数量</label><input id="soQty" type="number" step="0.01" min="0.0001" placeholder="如 20" /></div>
+                      <div class="ops-field field-narrow"><label for="soPrice">单价</label><input id="soPrice" type="number" step="0.01" min="0" placeholder="如 15" /></div>
+                      <div class="ops-field ops-field-action"><label>操作</label><button id="btnConfirmSales">确定</button></div>
+                      </div>
+                      <div id="soPreviewHint" class="muted" style="margin-top:6px;font-size:12px;"></div>
+                    </details>
+                  </div>
+                  <div class="ops-param-card" id="paramCardReceipt">
+                    <details class="param-card-fold">
+                      <summary><div class="ops-param-title">收款单参数</div></summary>
+                      <div class="ops-fields">
+                      <div class="ops-field field-wide"><label for="rcNo">收款单号</label><input id="rcNo" placeholder="RC..." /></div>
+                      <div class="ops-field field-wide"><label class="has-chip" for="rcCustomerPick">客户 <span id="chipRcCustomerPick" class="select-chip">已选</span></label><select id="rcCustomerPick"><option value="">选择客户</option></select><div id="boxQuickAddCustomerReceipt" class="row" style="display:none;margin-top:4px;gap:6px;"><input id="inputQuickAddCustomerReceiptCode" placeholder="编码（可选）" style="max-width:120px;" /><input id="inputQuickAddCustomerReceiptName" placeholder="客户名称" style="min-width:140px;" /><button type="button" id="btnConfirmQuickAddCustomerReceipt">确定</button><button type="button" class="secondary" id="btnCancelQuickAddCustomerReceipt">取消</button></div></div>
+                      <div class="ops-field field-wide"><label class="has-chip" for="rcArPick">应收单据 <span id="chipRcArPick" class="select-chip">已选</span></label><select id="rcArPick"><option value="">自动匹配未结应收</option></select></div>
+                      <input id="rcArInvoiceId" type="hidden" />
+                      <div class="ops-field field-narrow"><label for="rcAmount">收款金额</label><input id="rcAmount" type="number" step="0.01" min="0.01" placeholder="如 100" /></div>
+                      <div class="ops-field ops-field-action"><label>操作</label><button id="btnConfirmReceipt">确定</button></div>
+                      </div>
+                      <div id="rcPreviewHint" class="muted" style="margin-top:6px;font-size:12px;"></div>
+                    </details>
+                  </div>
+                  <div class="ops-param-card" id="paramCardPayment">
+                    <details class="param-card-fold">
+                      <summary><div class="ops-param-title">付款单参数</div></summary>
+                      <div class="ops-fields">
+                      <div class="ops-field field-wide"><label for="pyNo">付款单号</label><input id="pyNo" placeholder="PY..." /></div>
+                      <div class="ops-field field-wide"><label class="has-chip" for="pySupplierPick">供应商 <span id="chipPySupplierPick" class="select-chip">已选</span></label><select id="pySupplierPick"><option value="">选择供应商</option></select><div id="boxQuickAddSupplierPayment" class="row" style="display:none;margin-top:4px;gap:6px;"><input id="inputQuickAddSupplierPaymentCode" placeholder="编码（可选）" style="max-width:120px;" /><input id="inputQuickAddSupplierPaymentName" placeholder="供应商名称" style="min-width:140px;" /><button type="button" id="btnConfirmQuickAddSupplierPayment">确定</button><button type="button" class="secondary" id="btnCancelQuickAddSupplierPayment">取消</button></div></div>
+                      <div class="ops-field field-wide"><label class="has-chip" for="pyApPick">应付单据 <span id="chipPyApPick" class="select-chip">已选</span></label><select id="pyApPick"><option value="">自动匹配未结应付</option></select></div>
+                      <input id="pyApBillId" type="hidden" />
+                      <div class="ops-field field-narrow"><label for="pyAmount">付款金额</label><input id="pyAmount" type="number" step="0.01" min="0.01" placeholder="如 200" /></div>
+                      <div class="ops-field ops-field-action"><label>操作</label><button id="btnConfirmPayment">确定</button></div>
+                      </div>
+                      <div id="pyPreviewHint" class="muted" style="margin-top:6px;font-size:12px;"></div>
+                    </details>
+                  </div>
+                  </div>
+                </div>
+              </div>
+              </div>
+              <section class="card" style="margin-top:8px;">
+                <h3 class="section-title">商品创建</h3>
+                <div class="row" style="margin-top:6px;align-items:flex-end;">
+                  <input id="newProductSku" placeholder="SKU（≥2字）" style="max-width:130px" />
+                  <input id="newProductName" placeholder="名称（≥2字）" style="min-width:140px" />
+                  <input id="newProductUnit" placeholder="单位" style="max-width:90px" />
+                  <input id="newProductCost" type="number" step="0.01" min="0" placeholder="成本价" style="max-width:100px" />
+                  <input id="newProductSale" type="number" step="0.01" min="0" placeholder="销售价" style="max-width:100px" />
+                  <button id="btnProductAdd" type="button">新增商品</button>
+                </div>
+              </section>
+            </section>
+
+            <section class="panel" id="panelProducts">
+              <div class="row">
+                <input id="filterProducts" placeholder="按 SKU/名称 筛选" />
+                <button class="secondary" id="btnProducts">刷新商品</button>
+                <button class="secondary" id="btnExportProducts">导出 CSV</button>
+              </div>
+              <div id="productsHint" class="muted">点击「刷新商品」加载列表；左侧「初始化主数据」会写入示例 SKU001。</div>
+              <div id="productsTable" class="table-wrap"></div>
+              <div class="pager" id="pagerProducts"></div>
+              <div class="drawer">
+                <div class="muted">商品详情（点击上方某一行）</div>
+                <pre id="productDetail">尚未选择商品。</pre>
+              </div>
+            </section>
+
+            <section class="panel" id="panelApproval">
+              <div class="row">
+                <button class="secondary" id="btnLoadPoApprovals">采购单列表</button>
+                <button class="secondary" id="btnLoadSoApprovals">销售单列表</button>
+                <button class="secondary" id="btnLoadPendingApprovals">我的待审批</button>
+                <button class="secondary" id="btnLoadApprovalSla">审批SLA</button>
+                <select id="approvalStatusFilter" style="max-width:180px">
+                  <option value="all">状态：全部</option>
+                  <option value="draft">仅草稿</option>
+                  <option value="submitted">仅已提交</option>
+                  <option value="approved">仅已审批</option>
+                  <option value="rejected">仅驳回</option>
+                  <option value="voided">仅作废</option>
+                  <option value="reversed">仅冲销</option>
+                </select>
+                <label class="muted" style="display:flex;align-items:center;gap:6px;">
+                  <input id="chkApprovalActionableOnly" type="checkbox" />
+                  <span>只看我可操作</span>
+                </label>
+              </div>
+              <div class="row" id="approvalSlaCards"></div>
+              <input id="approvalOrderId" type="hidden" />
+              <div class="row" id="approvalRejectRow" style="display:none;">
+                <input id="approvalComment" placeholder="请填写驳回意见（必填）" />
+                <button type="button" id="btnConfirmRejectInput">确定</button>
+                <button type="button" class="secondary" id="btnCancelRejectInput">取消驳回</button>
+              </div>
+              <div class="row">
+                <button id="btnSubmitApproval">提交</button>
+                <button id="btnApproveApproval">通过</button>
+                <button class="secondary" id="btnRejectApproval">驳回</button>
+                <button class="secondary" id="btnVoidApproval">作废</button>
+                <button class="danger" id="btnReverseApproval">冲销</button>
+              </div>
+              <div id="approvalActionHint" class="warn" style="display:none;margin-top:6px;"></div>
+              <div class="row" style="align-items: center; gap: 10px; flex-wrap: wrap">
+                <span id="approvalContextLabel" class="muted" style="font-size: 13px">当前：采购单（动作发往 <code>/api/purchase-orders/:id/action</code>）</span>
+                <span id="approvalViewLabel" class="muted" style="font-size: 13px">视图：未加载</span>
+                <span id="approvalSelectedIdHint" class="muted" style="font-size: 13px">当前单据：未选中</span>
+                <button type="button" class="secondary" id="btnResetApprovalView">恢复默认视图</button>
+                <button type="button" class="secondary" id="btnCopyApprovalDetailCurl">复制详情命令</button>
+              </div>
+              <div class="split" style="margin-top:8px;">
+                <div>
+                  <div id="approvalTable" class="table-wrap"></div>
+                  <div class="row" style="margin-top:8px;">
+                    <button class="secondary" id="btnLoadOverdueApprovals">超时待审批(24h)</button>
+                    <button class="secondary" id="btnLoadTimeline">查看审批时间轴</button>
+                  </div>
+                  <div id="approvalOverdueTable" class="table-wrap" style="margin-top:8px;"></div>
+                </div>
+                <aside class="split-side">
+                  <div class="drawer">
+                    <div class="muted">审批单据详情（点击左侧某一行）</div>
+                    <pre id="approvalDetail">尚未选择审批单据。</pre>
+                  </div>
+                  <div class="drawer">
+                    <div class="muted">审批时间轴（输入单据ID并点击“查看审批时间轴”）</div>
+                    <div id="approvalTimeline" class="muted">尚未加载审批时间轴。</div>
+                  </div>
+                </aside>
+              </div>
+            </section>
+
+            <section class="panel" id="panelAr">
+              <div class="row">
+                <input id="filterAr" placeholder="按 发票/客户/状态 筛选" />
+                <button class="secondary" id="btnAr">刷新应收</button>
+                <button class="secondary" id="btnExportAr">导出 CSV</button>
+              </div>
+              <div id="arHint" class="muted">点击“查询应收”加载数据</div>
+              <div id="arTable" class="table-wrap"></div>
+              <div class="pager" id="pagerAr"></div>
+              <div class="drawer">
+                <div class="muted">应收详情（点击上方某一行）</div>
+                <pre id="arDetail">尚未选择应收单据。</pre>
+              </div>
+            </section>
+
+            <section class="panel" id="panelAp">
+              <div class="row">
+                <input id="filterAp" placeholder="按 账单/供应商/状态 筛选" />
+                <button class="secondary" id="btnAp">刷新应付</button>
+                <button class="secondary" id="btnExportAp">导出 CSV</button>
+              </div>
+              <div id="apHint" class="muted">点击“查询应付”加载数据</div>
+              <div id="apTable" class="table-wrap"></div>
+              <div class="pager" id="pagerAp"></div>
+              <div class="drawer">
+                <div class="muted">应付详情（点击上方某一行）</div>
+                <pre id="apDetail">尚未选择应付单据。</pre>
+              </div>
+            </section>
+
+            <section class="panel" id="panelJournals">
+              <div class="row">
+                <input id="filterJournals" placeholder="按 凭证号/来源/摘要 筛选" />
+                <button class="secondary" id="btnJournals">刷新凭证</button>
+                <button class="secondary" id="btnExportJournals">导出 CSV</button>
+              </div>
+              <div class="muted">点击左侧表格行，右侧实时显示凭证详情。</div>
+              <div class="split" style="margin-top:8px;">
+                <div>
+                  <div id="journalsHint" class="muted">点击“查询凭证”加载数据</div>
+                  <div id="journalsTable" class="table-wrap"></div>
+                  <div class="pager" id="pagerJournals"></div>
+                </div>
+                <aside class="split-side">
+                  <div class="drawer">
+                    <div class="muted">凭证明细（点击左侧某一行）</div>
+                    <pre id="journalDetail">尚未选择凭证。</pre>
+                  </div>
+                </aside>
+              </div>
+            </section>
+
+            <section class="panel" id="panelTrend">
+              <div class="row">
+                <button class="secondary" id="btnTrend">刷新趋势</button>
+              </div>
+              <div class="muted">最近14天交易趋势（销售/采购/收款/付款）。</div>
+              <div id="trendChart" class="trend" style="margin-top:8px;"></div>
+            </section>
+
+            <section class="panel" id="panelAudit">
+              <div class="row">
+                <input id="filterAudit" placeholder="按 用户/动作/实体 筛选" />
+                <button class="secondary" id="btnAudit">刷新审计</button>
+                <button class="secondary" id="btnExportAudit">导出 CSV</button>
+              </div>
+              <div class="muted">仅管理员可查看</div>
+              <div id="auditTable" class="table-wrap"></div>
+              <div class="pager" id="pagerAudit"></div>
+            </section>
+
+            <section class="panel" id="panelAlerts">
+              <div class="row">
+                <button class="secondary" id="btnAlerts">刷新告警</button>
+                <button class="secondary" id="btnExportAlerts">导出 CSV</button>
+              </div>
+              <div class="muted">显示审批超时等系统告警事件（管理员）。</div>
+              <div id="alertsTable" class="table-wrap"></div>
+              <div class="pager" id="pagerAlerts"></div>
+            </section>
+          </section>
+        </main>
+      </div>
+      <section class="card logs" id="logsSection">
+        <div class="toolbar">
+          <h3 class="section-title" style="margin:0;">日志输出</h3>
+          <button class="ghost" id="btnClearLogs">清空日志</button>
+        </div>
+        <pre id="output"></pre>
+      </section>
+    </div>
+
+    <script src="/app/app.js"></script>
+  </body>
+</html>

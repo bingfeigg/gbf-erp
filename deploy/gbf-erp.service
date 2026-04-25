@@ -1,0 +1,25 @@
+[Unit]
+Description=GBF ERP API Service
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/gbf-erp
+Environment=NODE_ENV=production
+Environment=PORT=3100
+Environment=JWT_SECRET=replace-with-strong-secret
+ExecStart=/usr/bin/node dist/index.js
+Restart=always
+RestartSec=3
+User=www-data
+Group=www-data
+StandardOutput=append:/var/log/gbf-erp/app.log
+StandardError=append:/var/log/gbf-erp/error.log
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/gbf-erp /opt/gbf-erp/data
+
+[Install]
+WantedBy=multi-user.target
