@@ -211,6 +211,45 @@ curl -sS -H "Authorization: Bearer $TOKEN" http://localhost:3100/api/sales-order
 ```bash
 curl -H "Authorization: Bearer $TOKEN" http://localhost:3100/api/products
 curl -H "Authorization: Bearer $TOKEN" http://localhost:3100/api/stock/ledger
+curl -H "Authorization: Bearer $TOKEN" http://localhost:3100/api/warehouses
+curl -H "Authorization: Bearer $TOKEN" "http://localhost:3100/api/locations?warehouseId=1"
+```
+
+创建仓库/库位（可选）：
+
+```bash
+curl -X POST http://localhost:3100/api/warehouses \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" \
+  -d '{"code":"WH02","name":"Secondary Warehouse"}'
+curl -X POST http://localhost:3100/api/locations \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" \
+  -d '{"warehouseId":1,"code":"B01","name":"Bin B01"}'
+```
+
+### 5.5）收货 / 发货 / 退货执行
+
+> 需先审批通过采购单/销售单后执行。支持部分收货/部分发货/部分退货。
+
+```bash
+# 采购收货
+curl -X POST http://localhost:3100/api/purchase-orders/1/receipts \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" \
+  -d '{"warehouseId":1,"locationId":1,"items":[{"productId":1,"qty":10,"batchNo":"BATCH-001"}]}'
+
+# 销售发货
+curl -X POST http://localhost:3100/api/sales-orders/1/deliveries \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" \
+  -d '{"warehouseId":1,"locationId":1,"items":[{"productId":1,"qty":5,"batchNo":"BATCH-001"}]}'
+
+# 采购退货
+curl -X POST http://localhost:3100/api/purchase-orders/1/returns \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" \
+  -d '{"warehouseId":1,"locationId":1,"items":[{"productId":1,"qty":2,"batchNo":"BATCH-001"}]}'
+
+# 销售退货
+curl -X POST http://localhost:3100/api/sales-orders/1/returns \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" \
+  -d '{"warehouseId":1,"locationId":1,"items":[{"productId":1,"qty":1,"batchNo":"BATCH-001"}]}'
 ```
 
 ### 6）应收/应付、收款/付款
