@@ -2,12 +2,20 @@ import { Express } from "express";
 import db from "../db";
 import { auth, requirePermission, getOrgId, hasPermission, AuthenticatedRequest } from "../middleware/auth";
 import { purchaseOrderSchema, orderActionSchema } from "../schemas/api";
-import { makeEntryNo, createJournalEntry } from "../services/journal";
 import { writeAuditLog } from "../services/audit";
 import { bodyHash, loadIdempotency, saveIdempotency } from "../services/idempotency";
 import { assertEntityExists, actionPermission, canTransitionOrder } from "../services/order-helpers";
 
 export function registerPurchaseOrderRoutes(app: Express): void {
+  const maybePaginate = <T>(req: { query: Record<string, unknown> }, rows: T[]) => {
+    const pageSize = Math.max(1, Math.min(200, Number(req.query.pageSize || 0)));
+    const page = Math.max(1, Number(req.query.page || 1));
+    if (!(pageSize > 0)) return rows;
+    const total = rows.length;
+    const start = (page - 1) * pageSize;
+    return { rows: rows.slice(start, start + pageSize), total, page, pageSize };
+  };
+
   app.post("/api/purchase-orders", auth, requirePermission("purchase:write"), (req, res, next) => {
     const parsed = purchaseOrderSchema.safeParse(req.body);
     if (!parsed.success) return next(parsed.error);
@@ -49,14 +57,103 @@ export function registerPurchaseOrderRoutes(app: Express): void {
     });
   });
 
-  app.get("/api/purchase-orders", auth, requirePermission("purchase:read"), (_req, res) => {
-    const orgId = getOrgId(_req);
+  app.get("/api/purchase-orders", auth, requirePermission("purchase:read"), (req, res) => {
+    const orgId = getOrgId(req);
+    const q = String(req.query.q ?? "").trim().toLowerCase();
+    const status = String(req.query.status ?? "all").trim().toLowerCase();
+    const stage = String(req.query.stage ?? "all").trim();
+    const actionableOnly = String(req.query.actionableOnly ?? "0") === "1";
     const rows = db
       .prepare(
-        "SELECT id, order_no as orderNo, supplier_id as supplierId, status, total_amount as totalAmount, created_at as createdAt, submitted_at as submittedAt, approved_at as approvedAt, rejected_at as rejectedAt, voided_at as voidedAt, approved_by as approvedBy FROM purchase_orders WHERE organization_id = ? ORDER BY id DESC"
+        `
+      SELECT
+        po.id,
+        po.order_no as orderNo,
+        po.supplier_id as supplierId,
+        po.status,
+        po.total_amount as totalAmount,
+        COALESCE(SUM(poi.qty), 0) as totalQty,
+        COALESCE(SUM(poi.received_qty), 0) as receivedQty,
+        COALESCE(SUM(poi.qty - poi.received_qty), 0) as remainingQty,
+        po.created_at as createdAt,
+        po.submitted_at as submittedAt,
+        po.approved_at as approvedAt,
+        po.rejected_at as rejectedAt,
+        po.voided_at as voidedAt,
+        po.approved_by as approvedBy
+      FROM purchase_orders po
+      LEFT JOIN purchase_order_items poi ON poi.order_id = po.id
+      WHERE po.organization_id = ?
+      GROUP BY po.id
+      ORDER BY po.id DESC
+      `
       )
-      .all(orgId);
-    res.json(rows);
+      .all(orgId) as Array<{
+      id: number;
+      status: string;
+      totalAmount: number;
+      totalQty: number;
+      receivedQty: number;
+      remainingQty: number;
+    }>;
+    const rowsWithPayment = rows.map((row) => {
+      let paymentStatus: "no_bill" | "unpaid" | "partial_paid" | "paid" = "no_bill";
+      let billOpenAmount = 0;
+      const bill = db
+        .prepare(
+          `
+          SELECT total_amount as totalAmount, paid_amount as paidAmount
+          FROM ap_bills
+          WHERE organization_id = ? AND ref_type = 'purchase_order' AND ref_id = ?
+          ORDER BY id DESC
+          LIMIT 1
+          `
+        )
+        .get(orgId, row.id) as { totalAmount: number; paidAmount: number } | undefined;
+      if (bill) {
+        const total = Number(bill.totalAmount || 0);
+        const paid = Number(bill.paidAmount || 0);
+        billOpenAmount = Math.max(0, total - paid);
+        if (paid <= 0.0001) paymentStatus = "unpaid";
+        else if (paid + 0.0001 >= total) paymentStatus = "paid";
+        else paymentStatus = "partial_paid";
+      }
+      return { ...row, paymentStatus, billOpenAmount };
+    });
+    const stageKey = (r: any) => {
+      const st = String(r.status || "").toLowerCase();
+      if (st !== "approved") return "other";
+      const total = Number(r.totalQty || 0);
+      const done = Number(r.receivedQty || 0);
+      const f = total <= 0 || done <= 0 ? "none" : done + 0.0001 >= total ? "full" : "partial";
+      const settlement = String(r.paymentStatus || "");
+      if (f === "none" && (settlement === "unpaid" || settlement === "no_bill")) return "todo";
+      if (f === "partial") return "doing";
+      if (f === "full" && (settlement === "unpaid" || settlement === "no_bill")) return "wait_settle";
+      if (f === "full" && settlement === "partial_paid") return "settling";
+      if (f === "full" && settlement === "paid") return "done";
+      return "abnormal";
+    };
+    const filtered = rowsWithPayment.filter((r: any) => {
+      if (q) {
+        const hay = `${r.id || ""} ${r.orderNo || ""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      const st = String(r.status || "").toLowerCase();
+      if (status !== "all" && st !== status) return false;
+      if (actionableOnly) {
+        const canSubmit = hasPermission((req as any).user, "purchase:submit");
+        const canApprove = hasPermission((req as any).user, "purchase:approve");
+        if (st === "draft" && !canSubmit) return false;
+        if (st === "submitted" && !canApprove) return false;
+        if (st !== "draft" && st !== "submitted") return false;
+      }
+      if (stage !== "all") {
+        if (stageKey(r) !== stage) return false;
+      }
+      return true;
+    });
+    res.json(maybePaginate(req, filtered));
   });
 
   app.get("/api/purchase-orders/:id", auth, requirePermission("purchase:read"), (req, res, next) => {
@@ -76,7 +173,10 @@ export function registerPurchaseOrderRoutes(app: Express): void {
     if (!order) return next(new Error("Purchase order not found"));
     const items = db
       .prepare(
-        `SELECT poi.id, poi.product_id as productId, p.sku, p.name as productName, poi.qty, poi.price, poi.amount
+        `SELECT poi.id, poi.product_id as productId, p.sku, p.name as productName,
+                poi.qty, poi.received_qty as receivedQty,
+                (poi.qty - poi.received_qty) as remainingQty,
+                poi.price, poi.amount
          FROM purchase_order_items poi
          JOIN products p ON p.id = poi.product_id AND p.organization_id = ?
          WHERE poi.order_id = ?
@@ -134,28 +234,12 @@ export function registerPurchaseOrderRoutes(app: Express): void {
           .get(orgId, bill.id) as { cnt: number };
         if (Number(paidLines.cnt || 0) > 0) throw new Error("Cannot reverse: AP bill already paid (has payment lines)");
 
-        const items = db
-          .prepare("SELECT product_id as productId, qty, price FROM purchase_order_items WHERE order_id = ? ORDER BY id")
-          .all(order.id) as Array<{ productId: number; qty: number; price: number }>;
-        for (const item of items) {
-          db.prepare(
-            "INSERT INTO stock_ledger (organization_id, product_id, qty_change, ref_type, ref_id) VALUES (?, ?, ?, ?, ?)"
-          ).run(orgId, item.productId, -item.qty, "purchase_order_reverse", order.id);
-        }
+        const receiptCount = db
+          .prepare("SELECT COUNT(*) as cnt FROM purchase_receipts WHERE organization_id = ? AND order_id = ?")
+          .get(orgId, order.id) as { cnt: number };
+        if (Number(receiptCount.cnt || 0) > 0) throw new Error("Cannot reverse: purchase receipts already exist");
 
         db.prepare("UPDATE ap_bills SET status = 'voided' WHERE id = ? AND organization_id = ?").run(bill.id, orgId);
-
-        createJournalEntry({
-          organizationId: orgId,
-          entryNo: makeEntryNo("JE-PO-RV-"),
-          refType: "purchase_order_reverse",
-          refId: order.id,
-          memo: `Purchase reversed ${order.orderNo}`,
-          lines: [
-            { accountCode: "2202", debit: order.totalAmount, credit: 0 },
-            { accountCode: "1405", debit: 0, credit: order.totalAmount }
-          ]
-        });
 
         db.prepare(
           `
@@ -172,7 +256,7 @@ export function registerPurchaseOrderRoutes(app: Express): void {
 
       let nextStatus = order.status;
       if (action === "submit") nextStatus = "submitted";
-      if (action === "reject") nextStatus = "draft";
+      if (action === "reject") nextStatus = "rejected";
       if (action === "void") nextStatus = "voided";
       if (action === "approve") nextStatus = "approved";
       db.prepare(
@@ -199,14 +283,6 @@ export function registerPurchaseOrderRoutes(app: Express): void {
           apBill = existedBill;
           return { order, nextStatus, apBill };
         }
-        const items = db
-          .prepare("SELECT product_id as productId, qty, price FROM purchase_order_items WHERE order_id = ? ORDER BY id")
-          .all(order.id) as Array<{ productId: number; qty: number; price: number }>;
-        for (const item of items) {
-          db.prepare(
-            "INSERT INTO stock_ledger (organization_id, product_id, qty_change, ref_type, ref_id) VALUES (?, ?, ?, ?, ?)"
-          ).run(orgId, item.productId, item.qty, "purchase_order", order.id);
-        }
         const billNo = `AP-${order.orderNo}`;
         const ap = db
           .prepare(
@@ -214,17 +290,6 @@ export function registerPurchaseOrderRoutes(app: Express): void {
           )
           .run(orgId, billNo, order.supplierId, "purchase_order", order.id, order.totalAmount);
         apBill = { id: Number(ap.lastInsertRowid), billNo };
-        createJournalEntry({
-          organizationId: orgId,
-          entryNo: makeEntryNo("JE-PO-"),
-          refType: "purchase_order",
-          refId: order.id,
-          memo: `Purchase approved ${order.orderNo}`,
-          lines: [
-            { accountCode: "1405", debit: order.totalAmount, credit: 0 },
-            { accountCode: "2202", debit: 0, credit: order.totalAmount }
-          ]
-        });
       }
       return { order, nextStatus, apBill };
     });

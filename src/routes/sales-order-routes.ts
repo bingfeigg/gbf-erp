@@ -2,12 +2,20 @@ import { Express } from "express";
 import db from "../db";
 import { auth, requirePermission, getOrgId, hasPermission, AuthenticatedRequest } from "../middleware/auth";
 import { salesOrderSchema, orderActionSchema } from "../schemas/api";
-import { makeEntryNo, createJournalEntry } from "../services/journal";
 import { writeAuditLog } from "../services/audit";
 import { bodyHash, loadIdempotency, saveIdempotency } from "../services/idempotency";
 import { assertEntityExists, actionPermission, canTransitionOrder } from "../services/order-helpers";
 
 export function registerSalesOrderRoutes(app: Express): void {
+  const maybePaginate = <T>(req: { query: Record<string, unknown> }, rows: T[]) => {
+    const pageSize = Math.max(1, Math.min(200, Number(req.query.pageSize || 0)));
+    const page = Math.max(1, Number(req.query.page || 1));
+    if (!(pageSize > 0)) return rows;
+    const total = rows.length;
+    const start = (page - 1) * pageSize;
+    return { rows: rows.slice(start, start + pageSize), total, page, pageSize };
+  };
+
   app.post("/api/sales-orders", auth, requirePermission("sales:write"), (req, res, next) => {
     const parsed = salesOrderSchema.safeParse(req.body);
     if (!parsed.success) return next(parsed.error);
@@ -56,14 +64,103 @@ export function registerSalesOrderRoutes(app: Express): void {
     });
   });
 
-  app.get("/api/sales-orders", auth, requirePermission("sales:read"), (_req, res) => {
-    const orgId = getOrgId(_req);
+  app.get("/api/sales-orders", auth, requirePermission("sales:read"), (req, res) => {
+    const orgId = getOrgId(req);
+    const q = String(req.query.q ?? "").trim().toLowerCase();
+    const status = String(req.query.status ?? "all").trim().toLowerCase();
+    const stage = String(req.query.stage ?? "all").trim();
+    const actionableOnly = String(req.query.actionableOnly ?? "0") === "1";
     const rows = db
       .prepare(
-        "SELECT id, order_no as orderNo, customer_id as customerId, status, total_amount as totalAmount, created_at as createdAt, submitted_at as submittedAt, approved_at as approvedAt, rejected_at as rejectedAt, voided_at as voidedAt, approved_by as approvedBy FROM sales_orders WHERE organization_id = ? ORDER BY id DESC"
+        `
+      SELECT
+        so.id,
+        so.order_no as orderNo,
+        so.customer_id as customerId,
+        so.status,
+        so.total_amount as totalAmount,
+        COALESCE(SUM(soi.qty), 0) as totalQty,
+        COALESCE(SUM(soi.delivered_qty), 0) as deliveredQty,
+        COALESCE(SUM(soi.qty - soi.delivered_qty), 0) as remainingQty,
+        so.created_at as createdAt,
+        so.submitted_at as submittedAt,
+        so.approved_at as approvedAt,
+        so.rejected_at as rejectedAt,
+        so.voided_at as voidedAt,
+        so.approved_by as approvedBy
+      FROM sales_orders so
+      LEFT JOIN sales_order_items soi ON soi.order_id = so.id
+      WHERE so.organization_id = ?
+      GROUP BY so.id
+      ORDER BY so.id DESC
+      `
       )
-      .all(orgId);
-    res.json(rows);
+      .all(orgId) as Array<{
+      id: number;
+      status: string;
+      totalAmount: number;
+      totalQty: number;
+      deliveredQty: number;
+      remainingQty: number;
+    }>;
+    const rowsWithReceipt = rows.map((row) => {
+      let receiptStatus: "no_invoice" | "unreceived" | "partial_received" | "received" = "no_invoice";
+      let invoiceOpenAmount = 0;
+      const invoice = db
+        .prepare(
+          `
+          SELECT total_amount as totalAmount, received_amount as receivedAmount
+          FROM ar_invoices
+          WHERE organization_id = ? AND ref_type = 'sales_order' AND ref_id = ?
+          ORDER BY id DESC
+          LIMIT 1
+          `
+        )
+        .get(orgId, row.id) as { totalAmount: number; receivedAmount: number } | undefined;
+      if (invoice) {
+        const total = Number(invoice.totalAmount || 0);
+        const received = Number(invoice.receivedAmount || 0);
+        invoiceOpenAmount = Math.max(0, total - received);
+        if (received <= 0.0001) receiptStatus = "unreceived";
+        else if (received + 0.0001 >= total) receiptStatus = "received";
+        else receiptStatus = "partial_received";
+      }
+      return { ...row, receiptStatus, invoiceOpenAmount };
+    });
+    const stageKey = (r: any) => {
+      const st = String(r.status || "").toLowerCase();
+      if (st !== "approved") return "other";
+      const total = Number(r.totalQty || 0);
+      const done = Number(r.deliveredQty || 0);
+      const f = total <= 0 || done <= 0 ? "none" : done + 0.0001 >= total ? "full" : "partial";
+      const settlement = String(r.receiptStatus || "");
+      if (f === "none" && (settlement === "unreceived" || settlement === "no_invoice")) return "todo";
+      if (f === "partial") return "doing";
+      if (f === "full" && (settlement === "unreceived" || settlement === "no_invoice")) return "wait_settle";
+      if (f === "full" && settlement === "partial_received") return "settling";
+      if (f === "full" && settlement === "received") return "done";
+      return "abnormal";
+    };
+    const filtered = rowsWithReceipt.filter((r: any) => {
+      if (q) {
+        const hay = `${r.id || ""} ${r.orderNo || ""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      const st = String(r.status || "").toLowerCase();
+      if (status !== "all" && st !== status) return false;
+      if (actionableOnly) {
+        const canSubmit = hasPermission((req as any).user, "sales:submit");
+        const canApprove = hasPermission((req as any).user, "sales:approve");
+        if (st === "draft" && !canSubmit) return false;
+        if (st === "submitted" && !canApprove) return false;
+        if (st !== "draft" && st !== "submitted") return false;
+      }
+      if (stage !== "all") {
+        if (stageKey(r) !== stage) return false;
+      }
+      return true;
+    });
+    res.json(maybePaginate(req, filtered));
   });
 
   app.get("/api/sales-orders/:id", auth, requirePermission("sales:read"), (req, res, next) => {
@@ -83,7 +180,10 @@ export function registerSalesOrderRoutes(app: Express): void {
     if (!order) return next(new Error("Sales order not found"));
     const items = db
       .prepare(
-        `SELECT soi.id, soi.product_id as productId, p.sku, p.name as productName, soi.qty, soi.price, soi.amount
+        `SELECT soi.id, soi.product_id as productId, p.sku, p.name as productName,
+                soi.qty, soi.delivered_qty as deliveredQty,
+                (soi.qty - soi.delivered_qty) as remainingQty,
+                soi.price, soi.amount
          FROM sales_order_items soi
          JOIN products p ON p.id = soi.product_id AND p.organization_id = ?
          WHERE soi.order_id = ?
@@ -140,39 +240,12 @@ export function registerSalesOrderRoutes(app: Express): void {
           .prepare("SELECT COUNT(*) as cnt FROM ar_receipt_lines WHERE organization_id = ? AND ar_invoice_id = ?")
           .get(orgId, invoice.id) as { cnt: number };
         if (Number(receiptLines.cnt || 0) > 0) throw new Error("Cannot reverse: AR invoice already received (has receipt lines)");
-
-        const items = db
-          .prepare("SELECT product_id as productId, qty, price FROM sales_order_items WHERE order_id = ? ORDER BY id")
-          .all(order.id) as Array<{ productId: number; qty: number; price: number }>;
-        let totalCogs = 0;
-        for (const item of items) {
-          const product = db
-            .prepare("SELECT id, cost_price as costPrice FROM products WHERE id = ? AND organization_id = ?")
-            .get(item.productId, orgId) as { id: number; costPrice: number } | undefined;
-          if (!product) throw new Error(`Product not found: ${item.productId}`);
-          totalCogs += item.qty * Number(product.costPrice || 0);
-        }
-        for (const item of items) {
-          db.prepare(
-            "INSERT INTO stock_ledger (organization_id, product_id, qty_change, ref_type, ref_id) VALUES (?, ?, ?, ?, ?)"
-          ).run(orgId, item.productId, item.qty, "sales_order_reverse", order.id);
-        }
+        const deliveryCount = db
+          .prepare("SELECT COUNT(*) as cnt FROM sales_deliveries WHERE organization_id = ? AND order_id = ?")
+          .get(orgId, order.id) as { cnt: number };
+        if (Number(deliveryCount.cnt || 0) > 0) throw new Error("Cannot reverse: sales deliveries already exist");
 
         db.prepare("UPDATE ar_invoices SET status = 'voided' WHERE id = ? AND organization_id = ?").run(invoice.id, orgId);
-
-        createJournalEntry({
-          organizationId: orgId,
-          entryNo: makeEntryNo("JE-SO-RV-"),
-          refType: "sales_order_reverse",
-          refId: order.id,
-          memo: `Sales reversed ${order.orderNo}`,
-          lines: [
-            { accountCode: "6001", debit: order.totalAmount, credit: 0 },
-            { accountCode: "1122", debit: 0, credit: order.totalAmount },
-            { accountCode: "1405", debit: totalCogs, credit: 0 },
-            { accountCode: "6401", debit: 0, credit: totalCogs }
-          ]
-        });
 
         db.prepare(
           `
@@ -189,7 +262,7 @@ export function registerSalesOrderRoutes(app: Express): void {
 
       let nextStatus = order.status;
       if (action === "submit") nextStatus = "submitted";
-      if (action === "reject") nextStatus = "draft";
+      if (action === "reject") nextStatus = "rejected";
       if (action === "void") nextStatus = "voided";
       if (action === "approve") nextStatus = "approved";
       db.prepare(
@@ -216,26 +289,6 @@ export function registerSalesOrderRoutes(app: Express): void {
           arInvoice = existedInvoice;
           return { order, nextStatus, arInvoice };
         }
-        const items = db
-          .prepare("SELECT product_id as productId, qty, price FROM sales_order_items WHERE order_id = ? ORDER BY id")
-          .all(order.id) as Array<{ productId: number; qty: number; price: number }>;
-        let totalCogs = 0;
-        for (const item of items) {
-          const product = db
-            .prepare("SELECT id, cost_price as costPrice FROM products WHERE id = ? AND organization_id = ?")
-            .get(item.productId, orgId) as { id: number; costPrice: number } | undefined;
-          if (!product) throw new Error(`Product not found: ${item.productId}`);
-          const stock = db
-            .prepare("SELECT COALESCE(SUM(qty_change), 0) as qty FROM stock_ledger WHERE product_id = ? AND organization_id = ?")
-            .get(item.productId, orgId) as { qty: number };
-          if (stock.qty < item.qty) throw new Error(`Insufficient stock for product ${item.productId}: ${stock.qty} < ${item.qty}`);
-          totalCogs += item.qty * product.costPrice;
-        }
-        for (const item of items) {
-          db.prepare(
-            "INSERT INTO stock_ledger (organization_id, product_id, qty_change, ref_type, ref_id) VALUES (?, ?, ?, ?, ?)"
-          ).run(orgId, item.productId, -item.qty, "sales_order", order.id);
-        }
         const invoiceNo = `AR-${order.orderNo}`;
         const ar = db
           .prepare(
@@ -243,19 +296,6 @@ export function registerSalesOrderRoutes(app: Express): void {
           )
           .run(orgId, invoiceNo, order.customerId, "sales_order", order.id, order.totalAmount);
         arInvoice = { id: Number(ar.lastInsertRowid), invoiceNo };
-        createJournalEntry({
-          organizationId: orgId,
-          entryNo: makeEntryNo("JE-SO-"),
-          refType: "sales_order",
-          refId: order.id,
-          memo: `Sales approved ${order.orderNo}`,
-          lines: [
-            { accountCode: "1122", debit: order.totalAmount, credit: 0 },
-            { accountCode: "6001", debit: 0, credit: order.totalAmount },
-            { accountCode: "6401", debit: totalCogs, credit: 0 },
-            { accountCode: "1405", debit: 0, credit: totalCogs }
-          ]
-        });
       }
       return { order, nextStatus, arInvoice };
     });

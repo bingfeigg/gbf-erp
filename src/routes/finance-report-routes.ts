@@ -149,7 +149,7 @@ export function registerFinanceReportRoutes(app: Express): void {
 
   app.get("/api/finance/reports/trend", auth, requirePermission("stock:read"), (_req, res) => {
     const orgId = getOrgId(_req);
-    const days = Math.min(30, Math.max(7, Number(_req.query.days ?? 14)));
+    const days = Math.min(180, Math.max(1, Number(_req.query.days ?? 14)));
     const rows = db
       .prepare(
         `

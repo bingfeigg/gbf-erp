@@ -186,6 +186,10 @@ export function initDb() {
       organization_id INTEGER NOT NULL DEFAULT 1,
       product_id INTEGER NOT NULL,
       qty_change REAL NOT NULL,
+      unit_cost REAL,
+      warehouse_id INTEGER,
+      location_id INTEGER,
+      batch_no TEXT,
       ref_type TEXT NOT NULL,
       ref_id INTEGER NOT NULL,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -223,6 +227,7 @@ export function initDb() {
       order_id INTEGER NOT NULL,
       product_id INTEGER NOT NULL,
       qty REAL NOT NULL,
+      received_qty REAL NOT NULL DEFAULT 0,
       price REAL NOT NULL,
       amount REAL NOT NULL,
       FOREIGN KEY(order_id) REFERENCES purchase_orders(id) ON DELETE CASCADE,
@@ -260,9 +265,155 @@ export function initDb() {
       order_id INTEGER NOT NULL,
       product_id INTEGER NOT NULL,
       qty REAL NOT NULL,
+      delivered_qty REAL NOT NULL DEFAULT 0,
       price REAL NOT NULL,
       amount REAL NOT NULL,
       FOREIGN KEY(order_id) REFERENCES sales_orders(id) ON DELETE CASCADE,
+      FOREIGN KEY(product_id) REFERENCES products(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS warehouses (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      organization_id INTEGER NOT NULL DEFAULT 1,
+      code TEXT NOT NULL,
+      name TEXT NOT NULL,
+      UNIQUE (organization_id, code)
+    );
+
+    CREATE TABLE IF NOT EXISTS locations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      organization_id INTEGER NOT NULL DEFAULT 1,
+      warehouse_id INTEGER NOT NULL,
+      code TEXT NOT NULL,
+      name TEXT NOT NULL,
+      UNIQUE (organization_id, warehouse_id, code),
+      FOREIGN KEY(warehouse_id) REFERENCES warehouses(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS purchase_receipts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      organization_id INTEGER NOT NULL DEFAULT 1,
+      receipt_no TEXT NOT NULL UNIQUE,
+      order_id INTEGER NOT NULL,
+      supplier_id INTEGER NOT NULL,
+      warehouse_id INTEGER,
+      location_id INTEGER,
+      total_amount REAL NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(order_id) REFERENCES purchase_orders(id),
+      FOREIGN KEY(supplier_id) REFERENCES suppliers(id),
+      FOREIGN KEY(warehouse_id) REFERENCES warehouses(id),
+      FOREIGN KEY(location_id) REFERENCES locations(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS purchase_receipt_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      receipt_id INTEGER NOT NULL,
+      order_item_id INTEGER NOT NULL,
+      product_id INTEGER NOT NULL,
+      qty REAL NOT NULL,
+      unit_price REAL NOT NULL,
+      unit_cost REAL NOT NULL,
+      amount REAL NOT NULL,
+      batch_no TEXT,
+      FOREIGN KEY(receipt_id) REFERENCES purchase_receipts(id) ON DELETE CASCADE,
+      FOREIGN KEY(order_item_id) REFERENCES purchase_order_items(id),
+      FOREIGN KEY(product_id) REFERENCES products(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS sales_deliveries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      organization_id INTEGER NOT NULL DEFAULT 1,
+      delivery_no TEXT NOT NULL UNIQUE,
+      order_id INTEGER NOT NULL,
+      customer_id INTEGER NOT NULL,
+      warehouse_id INTEGER,
+      location_id INTEGER,
+      total_amount REAL NOT NULL DEFAULT 0,
+      total_cost REAL NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(order_id) REFERENCES sales_orders(id),
+      FOREIGN KEY(customer_id) REFERENCES customers(id),
+      FOREIGN KEY(warehouse_id) REFERENCES warehouses(id),
+      FOREIGN KEY(location_id) REFERENCES locations(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS sales_delivery_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      delivery_id INTEGER NOT NULL,
+      order_item_id INTEGER NOT NULL,
+      product_id INTEGER NOT NULL,
+      qty REAL NOT NULL,
+      unit_price REAL NOT NULL,
+      unit_cost REAL NOT NULL,
+      amount REAL NOT NULL,
+      cost_amount REAL NOT NULL,
+      batch_no TEXT,
+      FOREIGN KEY(delivery_id) REFERENCES sales_deliveries(id) ON DELETE CASCADE,
+      FOREIGN KEY(order_item_id) REFERENCES sales_order_items(id),
+      FOREIGN KEY(product_id) REFERENCES products(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS purchase_returns (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      organization_id INTEGER NOT NULL DEFAULT 1,
+      return_no TEXT NOT NULL UNIQUE,
+      order_id INTEGER NOT NULL,
+      supplier_id INTEGER NOT NULL,
+      warehouse_id INTEGER,
+      location_id INTEGER,
+      total_amount REAL NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(order_id) REFERENCES purchase_orders(id),
+      FOREIGN KEY(supplier_id) REFERENCES suppliers(id),
+      FOREIGN KEY(warehouse_id) REFERENCES warehouses(id),
+      FOREIGN KEY(location_id) REFERENCES locations(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS purchase_return_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      return_id INTEGER NOT NULL,
+      order_item_id INTEGER NOT NULL,
+      product_id INTEGER NOT NULL,
+      qty REAL NOT NULL,
+      unit_price REAL NOT NULL,
+      amount REAL NOT NULL,
+      batch_no TEXT,
+      FOREIGN KEY(return_id) REFERENCES purchase_returns(id) ON DELETE CASCADE,
+      FOREIGN KEY(order_item_id) REFERENCES purchase_order_items(id),
+      FOREIGN KEY(product_id) REFERENCES products(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS sales_returns (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      organization_id INTEGER NOT NULL DEFAULT 1,
+      return_no TEXT NOT NULL UNIQUE,
+      order_id INTEGER NOT NULL,
+      customer_id INTEGER NOT NULL,
+      warehouse_id INTEGER,
+      location_id INTEGER,
+      total_amount REAL NOT NULL DEFAULT 0,
+      total_cost REAL NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(order_id) REFERENCES sales_orders(id),
+      FOREIGN KEY(customer_id) REFERENCES customers(id),
+      FOREIGN KEY(warehouse_id) REFERENCES warehouses(id),
+      FOREIGN KEY(location_id) REFERENCES locations(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS sales_return_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      return_id INTEGER NOT NULL,
+      order_item_id INTEGER NOT NULL,
+      product_id INTEGER NOT NULL,
+      qty REAL NOT NULL,
+      unit_price REAL NOT NULL,
+      unit_cost REAL NOT NULL,
+      amount REAL NOT NULL,
+      cost_amount REAL NOT NULL,
+      batch_no TEXT,
+      FOREIGN KEY(return_id) REFERENCES sales_returns(id) ON DELETE CASCADE,
+      FOREIGN KEY(order_item_id) REFERENCES sales_order_items(id),
       FOREIGN KEY(product_id) REFERENCES products(id)
     );
 
@@ -421,6 +572,15 @@ export function initDb() {
   ensureColumn("sales_orders", "approved_by", "INTEGER");
   ensureColumn("sales_orders", "reversed_at", "TEXT");
   ensureColumn("sales_orders", "reversed_by", "INTEGER");
+
+  // Backward-compat: legacy "reject" used to set status back to draft but kept rejected_at.
+  // Promote those rows to explicit status='rejected' so UI/status filters are consistent.
+  try {
+    db.prepare("UPDATE purchase_orders SET status = 'rejected' WHERE status = 'draft' AND rejected_at IS NOT NULL").run();
+    db.prepare("UPDATE sales_orders SET status = 'rejected' WHERE status = 'draft' AND rejected_at IS NOT NULL").run();
+  } catch (_e) {
+    // best-effort, never block boot
+  }
   ensureColumn("users", "organization_id", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn("customers", "organization_id", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn("suppliers", "organization_id", "INTEGER NOT NULL DEFAULT 1");
@@ -429,6 +589,10 @@ export function initDb() {
   ensureColumn("sales_orders", "organization_id", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn("journal_entries", "organization_id", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn("stock_ledger", "organization_id", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn("stock_ledger", "unit_cost", "REAL");
+  ensureColumn("stock_ledger", "warehouse_id", "INTEGER");
+  ensureColumn("stock_ledger", "location_id", "INTEGER");
+  ensureColumn("stock_ledger", "batch_no", "TEXT");
   ensureColumn("ap_bills", "organization_id", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn("ar_invoices", "organization_id", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn("cash_receipts", "organization_id", "INTEGER NOT NULL DEFAULT 1");
@@ -439,6 +603,8 @@ export function initDb() {
   ensureColumn("ap_payment_lines", "organization_id", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn("webhook_endpoints", "organization_id", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn("webhook_deliveries", "organization_id", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn("purchase_order_items", "received_qty", "REAL NOT NULL DEFAULT 0");
+  ensureColumn("sales_order_items", "delivered_qty", "REAL NOT NULL DEFAULT 0");
 
   // Make code/sku unique per organization (SQLite requires table rebuild to remove old UNIQUE(code/sku))
   // Keep ids stable to avoid breaking foreign keys.
@@ -448,6 +614,8 @@ export function initDb() {
 
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_stock_ledger_product ON stock_ledger(product_id);
+    CREATE INDEX IF NOT EXISTS idx_stock_ledger_wh_loc ON stock_ledger(organization_id, warehouse_id, location_id);
+    CREATE INDEX IF NOT EXISTS idx_stock_ledger_batch ON stock_ledger(organization_id, batch_no);
     CREATE INDEX IF NOT EXISTS idx_purchase_items_order ON purchase_order_items(order_id);
     CREATE INDEX IF NOT EXISTS idx_sales_items_order ON sales_order_items(order_id);
     CREATE INDEX IF NOT EXISTS idx_ar_customer_status ON ar_invoices(customer_id, status);
@@ -471,6 +639,12 @@ export function initDb() {
     CREATE INDEX IF NOT EXISTS idx_customers_org_code ON customers(organization_id, code);
     CREATE INDEX IF NOT EXISTS idx_suppliers_org_code ON suppliers(organization_id, code);
     CREATE INDEX IF NOT EXISTS idx_products_org_sku ON products(organization_id, sku);
+    CREATE INDEX IF NOT EXISTS idx_warehouses_org_code ON warehouses(organization_id, code);
+    CREATE INDEX IF NOT EXISTS idx_locations_org_wh_code ON locations(organization_id, warehouse_id, code);
+    CREATE INDEX IF NOT EXISTS idx_purchase_receipts_order ON purchase_receipts(organization_id, order_id);
+    CREATE INDEX IF NOT EXISTS idx_sales_deliveries_order ON sales_deliveries(organization_id, order_id);
+    CREATE INDEX IF NOT EXISTS idx_purchase_returns_order ON purchase_returns(organization_id, order_id);
+    CREATE INDEX IF NOT EXISTS idx_sales_returns_order ON sales_returns(organization_id, order_id);
     CREATE INDEX IF NOT EXISTS idx_approval_rules_org_type ON approval_rules(organization_id, order_type, min_amount);
     CREATE INDEX IF NOT EXISTS idx_idempotency_lookup ON api_idempotency(organization_id, endpoint, idempotency_key);
     CREATE INDEX IF NOT EXISTS idx_webhook_endpoints_org ON webhook_endpoints(organization_id, enabled);
@@ -531,6 +705,16 @@ export function initDb() {
   );
   seedAlertRule.run(1, "approval_overdue_hours", "24");
   seedAlertRule.run(1, "approval_scan_interval_ms", "300000");
+
+  db.prepare("INSERT OR IGNORE INTO warehouses (organization_id, code, name) VALUES (1, 'MAIN', 'Main Warehouse')").run();
+  const wh = db
+    .prepare("SELECT id FROM warehouses WHERE organization_id = 1 AND code = 'MAIN'")
+    .get() as { id: number } | undefined;
+  if (wh) {
+    db.prepare(
+      "INSERT OR IGNORE INTO locations (organization_id, warehouse_id, code, name) VALUES (1, ?, 'A01', 'Default Location')"
+    ).run(wh.id);
+  }
 }
 
 export default db;

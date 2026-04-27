@@ -7,6 +7,16 @@ import { writeAuditLog } from "../services/audit";
 import { bodyHash, loadIdempotency, saveIdempotency } from "../services/idempotency";
 
 export function registerFinanceRoutes(app: Express): void {
+  const maybePaginate = <T>(req: { query: Record<string, unknown> }, rows: T[]) => {
+    const rawPageSize = Number(req.query.pageSize);
+    if (!Number.isFinite(rawPageSize) || rawPageSize <= 0) return rows;
+    const pageSize = Math.max(1, Math.min(200, rawPageSize));
+    const page = Math.max(1, Number(req.query.page || 1));
+    const total = rows.length;
+    const start = (page - 1) * pageSize;
+    return { rows: rows.slice(start, start + pageSize), total, page, pageSize };
+  };
+
   app.get("/api/finance/accounts", auth, requirePermission("purchase:read"), (_req, res) => {
     const rows = db.prepare("SELECT id, code, name, type FROM accounts ORDER BY code").all();
     res.json(rows);
@@ -42,8 +52,36 @@ export function registerFinanceRoutes(app: Express): void {
       ORDER BY i.id DESC
       `
       )
-      .all(orgId);
-    res.json(rows);
+      .all(orgId) as Array<{
+      id: number;
+      refType: string;
+      refId: number;
+      totalAmount: number;
+      receivedAmount: number;
+    }>;
+    const rowsWithFulfillment = rows.map((row) => {
+      let fulfillmentStatus: "unknown" | "not_shipped" | "partially_shipped" | "fully_shipped" = "unknown";
+      if (row.refType === "sales_order" && row.refId) {
+        const shipping = db
+          .prepare(
+            `
+            SELECT
+              COALESCE(SUM(qty), 0) as totalQty,
+              COALESCE(SUM(delivered_qty), 0) as deliveredQty
+            FROM sales_order_items
+            WHERE order_id = ?
+            `
+          )
+          .get(row.refId) as { totalQty: number; deliveredQty: number };
+        const totalQty = Number(shipping.totalQty || 0);
+        const deliveredQty = Number(shipping.deliveredQty || 0);
+        if (totalQty <= 0 || deliveredQty <= 0) fulfillmentStatus = "not_shipped";
+        else if (deliveredQty + 0.0001 >= totalQty) fulfillmentStatus = "fully_shipped";
+        else fulfillmentStatus = "partially_shipped";
+      }
+      return { ...row, fulfillmentStatus };
+    });
+    res.json(maybePaginate(_req, rowsWithFulfillment));
   });
 
   app.get("/api/ap/bills", auth, requirePermission("purchase:read"), (_req, res) => {
@@ -60,8 +98,30 @@ export function registerFinanceRoutes(app: Express): void {
       ORDER BY b.id DESC
       `
       )
-      .all(orgId);
-    res.json(rows);
+      .all(orgId) as Array<{ id: number; refType: string; refId: number }>;
+    const rowsWithFulfillment = rows.map((row) => {
+      let fulfillmentStatus: "unknown" | "not_received" | "partially_received" | "fully_received" = "unknown";
+      if (row.refType === "purchase_order" && row.refId) {
+        const receiving = db
+          .prepare(
+            `
+            SELECT
+              COALESCE(SUM(qty), 0) as totalQty,
+              COALESCE(SUM(received_qty), 0) as receivedQty
+            FROM purchase_order_items
+            WHERE order_id = ?
+            `
+          )
+          .get(row.refId) as { totalQty: number; receivedQty: number };
+        const totalQty = Number(receiving.totalQty || 0);
+        const receivedQty = Number(receiving.receivedQty || 0);
+        if (totalQty <= 0 || receivedQty <= 0) fulfillmentStatus = "not_received";
+        else if (receivedQty + 0.0001 >= totalQty) fulfillmentStatus = "fully_received";
+        else fulfillmentStatus = "partially_received";
+      }
+      return { ...row, fulfillmentStatus };
+    });
+    res.json(maybePaginate(_req, rowsWithFulfillment));
   });
 
   app.post("/api/finance/receipts", auth, requirePermission("sales:write"), (req, res, next) => {
@@ -184,6 +244,32 @@ export function registerFinanceRoutes(app: Express): void {
         .prepare("SELECT id, total_amount as totalAmount, paid_amount as paidAmount FROM ap_bills WHERE id = ? AND organization_id = ?")
         .get(targetBillId, orgId) as { id: number; totalAmount: number; paidAmount: number } | undefined;
       if (!bill) throw new Error("AP bill not found");
+
+      // 业务约束：采购单未收货完成时禁止付款（避免“先付后收”造成执行与资金脱节）。
+      const linkedPurchase = db
+        .prepare(
+          `
+          SELECT ref_id as orderId
+          FROM ap_bills
+          WHERE id = ? AND organization_id = ? AND ref_type = 'purchase_order'
+          `
+        )
+        .get(targetBillId, orgId) as { orderId: number } | undefined;
+      if (linkedPurchase?.orderId) {
+        const remaining = db
+          .prepare(
+            `
+            SELECT COALESCE(SUM(qty - received_qty), 0) as remainingQty
+            FROM purchase_order_items
+            WHERE order_id = ?
+            `
+          )
+          .get(linkedPurchase.orderId) as { remainingQty: number };
+        if (Number(remaining.remainingQty || 0) > 0.0001) {
+          throw new Error("Cannot pay: purchase order not fully received yet");
+        }
+      }
+
       const remaining = bill.totalAmount - bill.paidAmount;
       if (amount > remaining + 0.0001) throw new Error(`Payment exceeds remaining AP: ${amount} > ${remaining}`);
 

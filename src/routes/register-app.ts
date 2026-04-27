@@ -9,6 +9,7 @@ import { registerNotificationRoutes } from "./notifications-routes";
 import { registerApprovalsRoutes } from "./approvals-routes";
 import { registerAuditRoutes } from "./audit-routes";
 import { registerConfigRoutes } from "./config-routes";
+import { registerReminderRoutes } from "./reminder-routes";
 
 /** 注册全部 HTTP 路由（顺序敏感：先公开/认证；财务核心后立即财务报表；错误处理在 index 最后挂载） */
 export function registerAppRoutes(app: Express): void {
@@ -21,5 +22,6 @@ export function registerAppRoutes(app: Express): void {
   registerNotificationRoutes(app);
   registerApprovalsRoutes(app);
   registerAuditRoutes(app);
+  registerReminderRoutes(app);
   registerConfigRoutes(app);
 }

@@ -21,6 +21,12 @@ export const orderItemSchema = z.object({
   price: z.number().nonnegative()
 });
 
+export const fulfillmentItemSchema = z.object({
+  productId: z.number().int().positive(),
+  qty: z.number().positive(),
+  batchNo: z.string().min(1).max(64).optional()
+});
+
 export const purchaseOrderSchema = z.object({
   orderNo: z.string().min(3),
   supplierId: z.number().int().positive(),
@@ -59,6 +65,50 @@ export const paymentSchema = z.object({
 export const orderActionSchema = z.object({
   action: z.enum(["submit", "approve", "reject", "void", "reverse"]),
   comment: z.string().max(200).optional()
+});
+
+const warehouseLocationSchema = z.object({
+  warehouseId: z.number().int().positive().optional(),
+  locationId: z.number().int().positive().optional()
+});
+
+export const purchaseReceiptSchema = z
+  .object({
+    receiptNo: z.string().min(3).optional(),
+    items: z.array(fulfillmentItemSchema).min(1)
+  })
+  .merge(warehouseLocationSchema);
+
+export const salesDeliverySchema = z
+  .object({
+    deliveryNo: z.string().min(3).optional(),
+    items: z.array(fulfillmentItemSchema).min(1)
+  })
+  .merge(warehouseLocationSchema);
+
+export const purchaseReturnSchema = z
+  .object({
+    returnNo: z.string().min(3).optional(),
+    items: z.array(fulfillmentItemSchema).min(1)
+  })
+  .merge(warehouseLocationSchema);
+
+export const salesReturnSchema = z
+  .object({
+    returnNo: z.string().min(3).optional(),
+    items: z.array(fulfillmentItemSchema).min(1)
+  })
+  .merge(warehouseLocationSchema);
+
+export const warehouseSchema = z.object({
+  code: z.string().min(2).optional(),
+  name: z.string().min(2)
+});
+
+export const locationSchema = z.object({
+  warehouseId: z.number().int().positive(),
+  code: z.string().min(2).optional(),
+  name: z.string().min(2)
 });
 
 export const erpRoleSchema = z.enum(["admin", "sales", "purchase", "warehouse", "finance"]);
