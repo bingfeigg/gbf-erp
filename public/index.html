@@ -52,11 +52,11 @@
       .login-card p {
         margin: 0 0 10px;
       }
-      .wrap { max-width: 1600px; margin: 12px auto; padding: 0 14px 14px; }
+      .wrap { max-width: 1760px; margin: 12px auto; padding: 0 16px 16px; }
       h1 { margin: 0 0 4px; font-size: 26px; letter-spacing: .2px; }
       .hero {
-        margin-bottom: 10px;
-        padding: 10px 12px;
+        margin-bottom: 12px;
+        padding: 12px 14px;
         border-radius: 12px;
         border: 1px solid rgba(255,255,255,.12);
         background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
@@ -70,18 +70,51 @@
       .hero-head h1 {
         margin: 0;
       }
-      .hero small { color: var(--text-sub); font-size: 13px; }
+      .hero small { color: var(--text-sub); font-size: 13px; line-height: 1.4; }
       .card {
         background: var(--glass);
         border: 1px solid var(--glass-border);
         border-radius: 12px;
-        padding: 10px;
+        padding: 11px;
         backdrop-filter: blur(6px);
         box-shadow: 0 6px 18px rgba(0,0,0,.22);
       }
-      .layout { display: grid; grid-template-columns: 312px minmax(0,1fr); gap: 12px; align-items: start; }
-      .left-col { position: sticky; top: 10px; display: grid; gap: 12px; }
-      .right-col { display: grid; gap: 12px; min-width: 0; }
+      .layout { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 12px; align-items: start; }
+      .left-col {
+        position: sticky;
+        top: 12px;
+        display: grid;
+        gap: 12px;
+        align-self: start;
+        max-height: calc(100vh - 24px);
+        overflow: auto;
+        padding-right: 2px;
+      }
+      .left-col::-webkit-scrollbar { width: 8px; }
+      .left-col::-webkit-scrollbar-thumb {
+        background: rgba(255,255,255,.18);
+        border-radius: 999px;
+      }
+      .right-col { display: grid; gap: 12px; min-width: 0; align-content: start; }
+      #mainWorkspaceCard { width: 100%; max-width: none; }
+      /* Keep create panel layout consistent with other panels */
+      #appShell.mode-form #panelCreate {
+        max-width: none;
+        margin: 0;
+      }
+      #appShell.mode-table #panelCreate {
+        max-width: none;
+        margin: 0;
+      }
+      #appShell.mode-table #mainWorkspaceCard .panel.active > .row:first-child {
+        position: sticky;
+        top: 0;
+        z-index: 6;
+        padding: 4px 0 8px;
+        margin-bottom: 8px;
+        background: linear-gradient(180deg, rgba(16, 28, 52, .96), rgba(16, 28, 52, .86));
+        border-bottom: 1px solid rgba(255,255,255,.10);
+      }
       .quickbar {
         display: flex;
         gap: 8px;
@@ -102,8 +135,93 @@
         margin-right: 2px;
       }
       .quickbar button { white-space: nowrap; }
-      .section-title { margin: 0 0 8px; font-size: 15px; color: #dbe7ff; }
-      .row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+      .section-title {
+        margin: 0 0 8px;
+        font-size: 14px;
+        color: #dbe7ff;
+        letter-spacing: .2px;
+      }
+      .card > .section-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: 8px;
+        border-bottom: 1px solid rgba(255,255,255,.10);
+        margin-bottom: 10px;
+      }
+      .row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 7px; }
+      .row.row-nowrap {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        -webkit-overflow-scrolling: touch;
+      }
+      .row.row-nowrap > * { flex: 0 0 auto; }
+      .w-80 { max-width: 80px; }
+      .w-90 { max-width: 90px; }
+      .w-100 { max-width: 100px; }
+      .w-110 { max-width: 110px; }
+      .w-120 { max-width: 120px; }
+      .w-130 { max-width: 130px; }
+      .w-150 { max-width: 150px; }
+      .w-160 { max-width: 160px; }
+      .w-170 { max-width: 170px; }
+      .w-180 { max-width: 180px; }
+      .w-190 { max-width: 190px; }
+      .w-200 { max-width: 200px; }
+      .w-220 { max-width: 220px; }
+      .w-260 { max-width: 260px; }
+      .minw-90 { min-width: 90px; }
+      .minw-120 { min-width: 120px; }
+      .minw-140 { min-width: 140px; }
+      .minw-150 { min-width: 150px; }
+      .minw-160 { min-width: 160px; }
+      .minw-170 { min-width: 170px; }
+      .minw-180 { min-width: 180px; }
+      .minw-200 { min-width: 200px; }
+      .minw-220 { min-width: 220px; }
+      .minw-240 { min-width: 240px; }
+      .minw-260 { min-width: 260px; }
+      .align-end { align-items: flex-end; }
+      .mb-0 { margin-bottom: 0 !important; }
+      .mt-0 { margin-top: 0 !important; }
+      .mt-6 { margin-top: 6px !important; }
+      .mt-8 { margin-top: 8px !important; }
+      .mt-10 { margin-top: 10px !important; }
+      .exec-row {
+        display: grid;
+        grid-template-columns:
+          minmax(180px, 2.2fr)
+          minmax(110px, 0.9fr)
+          minmax(160px, 1.6fr)
+          minmax(90px, 0.8fr)
+          minmax(130px, 1.1fr)
+          minmax(130px, 1.1fr)
+          minmax(140px, 1.2fr)
+          minmax(220px, 260px);
+        gap: 8px;
+        align-items: end;
+        width: 100%;
+        min-width: 0;
+      }
+      .row.exec-row { margin-bottom: 0; }
+      .exec-row > * { min-width: 0; width: 100%; }
+      .exec-row input, .exec-row select { width: 100%; max-width: none !important; }
+      .exec-actions {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+        align-items: center;
+        width: 100%;
+        flex-wrap: nowrap;
+        height: 36px;
+      }
+      .exec-actions button {
+        width: auto;
+        min-width: 102px;
+        height: 36px;
+        white-space: nowrap;
+      }
       input, button {
         padding: 8px 10px;
         border: 1px solid rgba(255,255,255,.2);
@@ -185,27 +303,60 @@
         max-height: 220px;
       }
       #approvalDetail {
-        white-space: pre-wrap;
-        overflow-wrap: break-word;
-        word-break: normal;
+        white-space: normal;
+        overflow-wrap: anywhere;
         max-width: 100%;
         line-height: 1.5;
         font-size: 13px;
+        max-height: 280px;
+        overflow: auto;
       }
+      .approval-detail-panel { display: grid; gap: 6px; }
+      .approval-detail-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+      .approval-detail-title { font-weight: 700; color: #e8efff; }
+      .approval-detail-kpi { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+      .approval-detail-kpi .k {
+        border: 1px solid rgba(255,255,255,.14);
+        border-radius: 8px;
+        background: rgba(255,255,255,.04);
+        padding: 4px 6px;
+      }
+      @media (max-width: 900px) {
+        .approval-detail-kpi { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      }
+      @media (max-width: 520px) {
+        .approval-detail-kpi { grid-template-columns: 1fr; }
+      }
+      .approval-detail-kpi .k .l { color: #9eb1d7; font-size: 11px; }
+      .approval-detail-kpi .k .v { color: #ffffff; font-weight: 600; margin-top: 2px; font-size: 12px; }
+      .approval-detail-meta { display: grid; gap: 3px; }
+      .approval-detail-meta .m { color: #cfe0ff; font-size: 12px; }
+      .approval-items-table { width: 100%; border-collapse: collapse; }
+      .approval-items-table th, .approval-items-table td { border-bottom: 1px solid rgba(255,255,255,.09); padding: 4px 6px; }
+      .approval-items-table th { color: #9eb1d7; font-size: 11px; text-align: left; }
+      .approval-items-table td.amount { text-align: right; font-variant-numeric: tabular-nums; }
+      .approval-items-wrap { overflow: auto; max-width: 100%; max-height: 150px; }
+      .approval-detail-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+      .approval-detail-actions button { min-width: 110px; }
       .ok { color: var(--ok); font-weight: bold; }
       .warn { color: var(--warn); font-weight: bold; }
       small { color: var(--text-sub); }
       .muted { color: #96a8cf; font-size: 12px; }
-      .kpi { display: grid; grid-template-columns: repeat(4,minmax(170px,1fr)); gap: 10px; margin-bottom: 14px; }
+      .kpi { display: grid; grid-template-columns: repeat(4,minmax(190px,1fr)); gap: 12px; margin-bottom: 14px; }
       .kpi-item {
         background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.05));
         border: 1px solid rgba(255,255,255,.14);
         border-radius: 10px;
-        padding: 10px;
+        padding: 12px;
       }
       .kpi-item .label { color: #9eb1d7; font-size: 12px; }
       .kpi-item .value { font-size: 24px; font-weight: 700; margin-top: 6px; color: #ffffff; }
       .kpi-item .kpi-sub { margin-top: 4px; line-height: 1.35; }
+      @media (min-width: 1900px) {
+        .wrap { max-width: 1920px; }
+        .layout { grid-template-columns: 300px minmax(0, 1fr); }
+        .kpi { grid-template-columns: repeat(4, minmax(210px, 1fr)); }
+      }
       .tabs {
         display: flex;
         gap: 8px;
@@ -236,8 +387,10 @@
       .ops-grid button { flex: 1; min-width: 126px; min-height: 36px; }
       .biz-action-buttons {
         display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: 1fr;
         gap: 8px;
+        width: 100%;
+        max-width: none;
       }
       .biz-action-buttons button {
         width: 100%;
@@ -248,6 +401,112 @@
       }
       #panelApproval .row > select {
         flex: 0 0 auto;
+      }
+      #panelApproval .approval-block {
+        border: 1px solid rgba(255,255,255,.12);
+        border-radius: 10px;
+        padding: 8px;
+        margin-bottom: 8px;
+        background: rgba(255,255,255,.03);
+      }
+      #panelApproval .approval-row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      #panelApproval .approval-row + .approval-row {
+        margin-top: 8px;
+      }
+      #panelApproval .approval-row .row-title {
+        font-size: 12px;
+        color: #b9c8eb;
+        min-width: 64px;
+      }
+      #panelApproval .approval-more {
+        margin-top: 8px;
+        border-top: 1px dashed rgba(255,255,255,.15);
+        padding-top: 8px;
+      }
+      #panelApproval .approval-more summary {
+        cursor: pointer;
+        color: #c9d9ff;
+        font-size: 12px;
+        user-select: none;
+      }
+      #panelApproval .approval-row button {
+        min-width: 108px;
+      }
+      #panelApproval .approval-row input,
+      #panelApproval .approval-row select {
+        min-height: 32px;
+      }
+      #panelApproval .approval-row #approvalSearch {
+        min-width: 220px;
+      }
+      #panelApproval .approval-row #approvalBatchIds {
+        min-width: 300px;
+      }
+      #panelApproval .approval-main-stack {
+        display: grid;
+        gap: 10px;
+      }
+      #panelApproval .approval-list-card {
+        border: 1px solid rgba(255,255,255,.12);
+        border-radius: 10px;
+        padding: 8px;
+        background: rgba(255,255,255,.02);
+      }
+      #panelApproval .approval-list-title {
+        font-size: 12px;
+        color: #b9c8eb;
+        margin-bottom: 6px;
+      }
+      #panelApproval #approvalTable table tbody tr:hover {
+        background: rgba(79, 140, 255, .08);
+      }
+      #panelApproval #approvalTable table {
+        table-layout: auto;
+      }
+      #panelApproval #approvalTable thead th {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        background: #172643;
+      }
+      #panelApproval #approvalTable th.first-col,
+      #panelApproval #approvalTable td.first-col {
+        position: static;
+        left: auto;
+        box-shadow: none;
+      }
+      #panelApproval #approvalTable th,
+      #panelApproval #approvalTable td {
+        white-space: nowrap;
+        line-height: 1.25;
+      }
+      #panelApproval #approvalTable th.th-status,
+      #panelApproval #approvalTable td.td-status,
+      #panelApproval #approvalTable th.th-stage,
+      #panelApproval #approvalTable td.td-stage {
+        min-width: 78px;
+      }
+      #panelApproval #approvalTable th.th-amount {
+        min-width: 84px;
+      }
+      #panelApproval #approvalTable th.th-time,
+      #panelApproval #approvalTable td.td-time {
+        min-width: 172px;
+      }
+      #panelApproval details.approval-overdue {
+        margin-top: 2px;
+      }
+      #panelApproval details.approval-overdue summary {
+        cursor: pointer;
+        color: #c9d9ff;
+        font-size: 12px;
+        user-select: none;
+        margin-bottom: 6px;
       }
       .ops-group {
         border: 1px solid rgba(255,255,255,.12);
@@ -349,7 +608,7 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 2px 0;
+        padding: 6px 6px;
         user-select: none;
       }
       .param-card-fold summary::-webkit-details-marker { display: none; }
@@ -359,6 +618,10 @@
         color: #9fb1d8;
       }
       .param-card-fold[open] summary::after { content: "收起"; }
+      .param-card-fold summary:hover {
+        background: rgba(255,255,255,.03);
+        border-radius: 8px;
+      }
       .param-card-fold .ops-fields { margin-top: 6px; }
       .ops-fields {
         display: grid;
@@ -378,10 +641,79 @@
         min-width: 0;
         width: 100%;
       }
+      .ops-field select {
+        min-width: 0;
+        width: 100%;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
       .ops-step {
         margin: 0 0 6px;
         font-size: 12px;
         color: #98add8;
+      }
+      .inline-action-feedback {
+        margin-top: 6px;
+        padding: 7px 9px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 600;
+        display: none;
+        border: 1px solid rgba(255,255,255,.18);
+      }
+      .inline-action-feedback.show { display: block; }
+      .inline-action-feedback.success {
+        color: #dff6ea;
+        background: rgba(13, 50, 39, .75);
+        border-color: rgba(54, 211, 153, .6);
+      }
+      .inline-action-feedback.error {
+        color: #ffdce2;
+        background: rgba(64, 25, 35, .75);
+        border-color: rgba(255, 122, 138, .7);
+      }
+      .inline-action-feedback.info {
+        color: #dbe7ff;
+        background: rgba(79, 140, 255, .10);
+        border-color: rgba(79, 140, 255, .35);
+        font-weight: 500;
+      }
+      .suggest-popover {
+        position: static;
+        z-index: 1;
+        display: none;
+        min-width: 260px;
+        max-width: 100%;
+        max-height: 260px;
+        overflow: auto;
+        margin-top: 8px;
+        padding: 10px 10px 8px;
+        border-radius: 10px;
+        border: 1px solid rgba(255,255,255,.18);
+        background: rgba(8, 18, 40, .98);
+      }
+      .suggest-popover.show { display: block; }
+      .suggest-title {
+        font-size: 12px;
+        font-weight: 700;
+        color: #dbe7ff;
+        margin-bottom: 6px;
+      }
+      .suggest-item {
+        padding: 6px 8px;
+        border-radius: 8px;
+        border: 1px solid rgba(255,255,255,.10);
+        background: rgba(255,255,255,.03);
+        margin-bottom: 6px;
+        font-size: 12px;
+        color: #e8eefc;
+        line-height: 1.35;
+      }
+      .suggest-item .muted {
+        font-size: 11px;
+        color: #9fb0d8;
       }
       .ops-note { padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); }
       .module-nav {
@@ -407,10 +739,16 @@
       .module-nav button {
         width: 100%;
         text-align: left;
-        justify-content: flex-start;
         background: rgba(255,255,255,.06);
         border-color: rgba(255,255,255,.18);
         color: #dce7ff;
+      }
+      .left-col .fold-content button {
+        text-align: left;
+        padding-left: 12px;
+      }
+      .left-col .biz-action-buttons button {
+        text-align: left;
       }
       .module-nav button.nav-active {
         background: linear-gradient(180deg, #5f95ff, #4f8cff);
@@ -421,6 +759,33 @@
         display: grid;
         grid-template-columns: 1fr;
         gap: 8px;
+      }
+      #panelCreate {
+        grid-template-columns: 1fr;
+        gap: 8px;
+        max-width: none;
+        margin: 0;
+      }
+      #panelCreate.panel.active {
+        display: grid;
+      }
+      #panelCreate > .card {
+        width: 100%;
+      }
+      #panelCreate .row {
+        flex-wrap: wrap;
+      }
+      #panelCreate .row > input,
+      #panelCreate .row > select {
+        flex: 1 1 220px;
+        max-width: none;
+      }
+      #panelCreate .row > button {
+        flex: 0 0 auto;
+      }
+      #panelCreate .card .row > input[style],
+      #panelCreate .card .row > select[style] {
+        max-width: none !important;
       }
       .ops-checkrow {
         display: flex;
@@ -457,16 +822,18 @@
         color: #dce7ff;
         list-style: none;
         user-select: none;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
       }
       .fold > summary::-webkit-details-marker { display: none; }
       .fold > summary::after {
         content: "▾";
-        float: right;
         color: #9db4e2;
       }
       .fold[open] > summary::after { content: "▴"; }
       .fold-content { padding: 0 10px 10px; }
-      .panel { display: none; border-top: 1px solid rgba(255,255,255,.12); padding-top: 10px; }
+      .panel { display: none; padding-top: 0; }
       .panel.active { display: block; animation: fadeIn .22s ease; }
       @keyframes fadeIn { from { opacity: 0; transform: translateY(4px);} to { opacity: 1; transform: translateY(0);} }
       table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -502,6 +869,29 @@
       th.th-status { background: rgba(251, 191, 36, .16); color: #ffefc2; }
       th.th-time { background: rgba(110, 168, 255, .18); color: #d8e7ff; }
       th.th-id { background: rgba(255,255,255,.08); color: #e5ecff; }
+      th.th-check, td.td-check {
+        width: 58px;
+        min-width: 58px;
+        max-width: 58px;
+        text-align: center;
+      }
+      th.th-idcol, td.td-idcol {
+        width: 68px;
+        min-width: 68px;
+        max-width: 68px;
+        text-align: center;
+        font-variant-numeric: tabular-nums;
+      }
+      td.td-check.first-col, th.th-check.first-col {
+        min-width: 58px;
+      }
+      th.th-orderno, td.td-orderno {
+        min-width: 240px;
+        max-width: 280px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
       th.th-amount, td.td-amount {
         text-align: right;
         font-variant-numeric: tabular-nums;
@@ -514,6 +904,7 @@
       .table-wrap {
         max-height: 520px;
         overflow: auto;
+        overscroll-behavior: contain;
         border: 1px solid rgba(255,255,255,.12);
         border-radius: 8px;
         background: rgba(5, 12, 28, .56);
@@ -528,17 +919,154 @@
         background: rgba(0,0,0,.18);
         box-shadow: inset 0 0 0 1px rgba(255,255,255,.03);
       }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 12px;
+        line-height: 1.3;
+        border: 1px solid rgba(255,255,255,.18);
+        background: rgba(255,255,255,.05);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      .badge.badge-warn {
+        border-color: rgba(251, 191, 36, .55);
+        background: rgba(251, 191, 36, .12);
+        color: #ffefc2;
+      }
+      .badge.badge-danger {
+        border-color: rgba(255, 122, 138, .65);
+        background: rgba(255, 122, 138, .12);
+        color: #ffdce2;
+      }
+      .badge.badge-ok {
+        border-color: rgba(34, 197, 94, .55);
+        background: rgba(34, 197, 94, .12);
+        color: #d9ffe5;
+      }
+      .badge.badge-info {
+        border-color: rgba(56, 189, 248, .55);
+        background: rgba(56, 189, 248, .12);
+        color: #d6f4ff;
+      }
+      .badge.badge-muted {
+        border-color: rgba(148, 163, 184, .35);
+        background: rgba(148, 163, 184, .08);
+        color: rgba(226, 232, 240, .9);
+      }
+      .reminder-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      @media (max-width: 1100px) {
+        .reminder-grid { grid-template-columns: 1fr; }
+      }
       .split {
         display: grid;
         grid-template-columns: minmax(0, 1fr) 320px;
         gap: 10px;
         align-items: start;
       }
+      #panelApproval .split {
+        grid-template-columns: 1fr;
+      }
+      #panelApproval .split-side {
+        position: static;
+        grid-template-columns: 1fr 1fr;
+        align-items: start;
+      }
+      #panelApproval .split-side .drawer {
+        margin-top: 0;
+        padding: 6px;
+      }
+      #panelApproval #approvalTimeline {
+        max-height: 190px;
+        overflow: auto;
+      }
+      @media (max-width: 1200px) {
+        #panelApproval .split-side { grid-template-columns: 1fr; }
+      }
       .split-side {
         position: sticky;
         top: 8px;
         display: grid;
         gap: 8px;
+      }
+      #panelJournals .split {
+        grid-template-columns: minmax(0, 1.45fr) minmax(360px, 1fr);
+      }
+      #panelJournals .split-side {
+        top: 12px;
+      }
+      #panelJournals #journalDetail {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        line-height: 1.45;
+        min-height: 260px;
+        max-height: 560px;
+        overflow: auto;
+      }
+      #panelJournals .journal-detail-view {
+        display: grid;
+        gap: 8px;
+      }
+      #panelJournals .journal-detail-kpi {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 6px;
+      }
+      #panelJournals .journal-detail-kpi .k {
+        border: 1px solid rgba(255,255,255,.14);
+        border-radius: 8px;
+        background: rgba(255,255,255,.03);
+        padding: 6px 8px;
+      }
+      #panelJournals .journal-detail-kpi .l {
+        font-size: 11px;
+        color: #9eb1d7;
+      }
+      #panelJournals .journal-detail-kpi .v {
+        margin-top: 2px;
+        font-weight: 700;
+        color: #f4f7ff;
+      }
+      #panelJournals .journal-detail-meta {
+        display: grid;
+        gap: 3px;
+        color: #cfe0ff;
+        font-size: 12px;
+      }
+      #panelJournals .journal-lines-wrap {
+        overflow: auto;
+        border: 1px solid rgba(255,255,255,.12);
+        border-radius: 8px;
+      }
+      #panelJournals .journal-lines-wrap table {
+        font-size: 12px;
+      }
+      #panelJournals .journal-lines-wrap th {
+        top: 0;
+        position: sticky;
+      }
+      #panelJournals .journal-raw summary {
+        cursor: pointer;
+        color: #bcd0ff;
+        font-size: 12px;
+      }
+      #panelJournals .drawer {
+        padding: 10px;
+      }
+      @media (max-width: 1180px) {
+        #panelJournals .split {
+          grid-template-columns: 1fr;
+        }
+        #panelJournals .journal-detail-kpi {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
       }
       .timeline { list-style: none; margin: 0; padding: 0; }
       .timeline li { position: relative; padding-left: 20px; margin: 0 0 10px; color: #dbe7ff; }
@@ -553,6 +1081,23 @@
         background: #6ea8ff;
       }
       .timeline li .meta { color: #9fb0d8; font-size: 12px; }
+      .approval-timeline-list { display: grid; gap: 8px; }
+      .approval-timeline-item {
+        border: 1px solid rgba(255,255,255,.14);
+        border-radius: 8px;
+        background: rgba(255,255,255,.03);
+        padding: 8px;
+      }
+      .approval-timeline-title { font-weight: 700; color: #e9f0ff; }
+      .approval-timeline-meta { color: #9fb0d8; font-size: 12px; margin-top: 2px; }
+      .approval-timeline-line { color: #dbe7ff; font-size: 12px; margin-top: 4px; line-height: 1.4; }
+      .approval-timeline-raw { margin-top: 6px; }
+      .approval-timeline-raw summary { cursor: pointer; color: #bcd0ff; font-size: 12px; }
+      .approval-timeline-raw pre {
+        margin-top: 6px;
+        max-height: 140px;
+        font-size: 12px;
+      }
       .logs { margin-top: 14px; }
       .logs pre { max-height: 300px; min-height: 140px; }
       .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
@@ -565,26 +1110,119 @@
         color: #dbe7ff;
         font-size: 12px;
       }
+      .action-toast {
+        position: fixed;
+        left: 50%;
+        top: 84px;
+        transform: translateX(-50%);
+        z-index: 1200;
+        min-width: 300px;
+        max-width: min(520px, calc(100vw - 24px));
+        padding: 12px 14px;
+        border-radius: 10px;
+        border: 1px solid rgba(255,255,255,.24);
+        background: rgba(11, 20, 36, .97);
+        color: #e8eefc;
+        font-size: 14px;
+        font-weight: 600;
+        line-height: 1.4;
+        display: none;
+        text-align: center;
+      }
+      .action-toast.show {
+        display: block;
+        animation: toastIn .24s ease-out, toastShake .36s ease-out .24s 1;
+      }
+      .action-toast.success {
+        border-color: rgba(54, 211, 153, .65);
+        background: rgba(13, 50, 39, .95);
+      }
+      .action-toast.error {
+        border-color: rgba(255, 122, 138, .7);
+        background: rgba(64, 25, 35, .95);
+      }
+      @keyframes toastIn {
+        from { opacity: 0; transform: translate(-50%, -10px); }
+        to { opacity: 1; transform: translate(-50%, 0); }
+      }
+      @keyframes toastShake {
+        0% { transform: translate(-50%, 0); }
+        25% { transform: translate(calc(-50% - 3px), 0); }
+        50% { transform: translate(calc(-50% + 3px), 0); }
+        75% { transform: translate(calc(-50% - 2px), 0); }
+        100% { transform: translate(-50%, 0); }
+      }
       .trend {
         display: grid;
-        gap: 8px;
+        gap: 10px;
       }
+      .trend-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 12px;
+        align-items: center;
+      }
+      .trend-legend .item {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: #cfe0ff;
+      }
+      .trend-legend .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+      }
+      .trend-legend .dot.sales { background: #6ea8ff; }
+      .trend-legend .dot.purchase { background: #f59e0b; }
+      .trend-legend .dot.receipt { background: #36d399; }
+      .trend-legend .dot.payment { background: #fb7185; }
       .trend-row {
         display: grid;
-        grid-template-columns: 110px 1fr 64px;
-        align-items: center;
+        grid-template-columns: 110px minmax(0, 1fr) 160px;
+        align-items: start;
         gap: 8px;
+        padding: 7px 8px;
+        border: 1px solid rgba(255,255,255,.10);
+        border-radius: 8px;
+        background: rgba(255,255,255,.02);
+      }
+      .trend-row.abnormal {
+        border-color: rgba(251, 113, 133, .55);
+        background: rgba(251, 113, 133, .08);
+      }
+      .trend-bars {
+        display: grid;
+        gap: 5px;
       }
       .trend-bar {
-        height: 16px;
-        border-radius: 10px;
-        background: rgba(255,255,255,.08);
+        height: 10px;
+        border-radius: 999px;
+        background: rgba(255,255,255,.07);
         overflow: hidden;
       }
       .trend-fill {
         height: 100%;
-        border-radius: 10px;
-        background: linear-gradient(90deg, #6ea8ff, #36d399);
+        border-radius: 999px;
+      }
+      .trend-fill.sales { background: #6ea8ff; }
+      .trend-fill.purchase { background: #f59e0b; }
+      .trend-fill.receipt { background: #36d399; }
+      .trend-fill.payment { background: #fb7185; }
+      .trend-values {
+        text-align: right;
+        font-size: 12px;
+        line-height: 1.35;
+        color: #d6e3ff;
+      }
+      .trend-values .net {
+        margin-top: 4px;
+        font-weight: 700;
+      }
+      .trend-values .delta {
+        margin-top: 2px;
+        font-size: 11px;
       }
       @media (max-width: 1300px) {
         .layout { grid-template-columns: 270px minmax(0,1fr); }
@@ -592,7 +1230,12 @@
       }
       @media (max-width: 1100px) {
         .layout { grid-template-columns: 1fr; }
-        .left-col { position: static; }
+        .left-col {
+          position: static;
+          max-height: none;
+          overflow: visible;
+          padding-right: 0;
+        }
         .split { grid-template-columns: 1fr; }
         .split-side { position: static; }
         #bizParamGrid .ops-field.field-wide,
@@ -662,7 +1305,7 @@
 
       <div class="layout">
         <aside class="left-col">
-          <section class="card">
+          <section class="card" id="mainWorkspaceCard">
             <details class="fold" open>
               <summary>创建中心</summary>
               <div class="fold-content">
@@ -731,7 +1374,7 @@
           <section class="card">
             <h3 class="section-title" id="currentModuleTitle">单据&商品创建</h3>
             <section class="panel active" id="panelCreate">
-              <div id="bizParamsWorkbench" style="margin-bottom:10px;">
+              <div id="bizParamsWorkbench" class="mb-0" style="margin-bottom:10px;">
               <div id="userOpsSection" class="ops-user-grid">
                 <div class="ops-group" id="bizParamsGroup">
                   <div id="pickOptionHint" class="muted" style="margin-bottom:6px;font-size:12px;display:none;"></div>
@@ -741,7 +1384,7 @@
                       <summary><div class="ops-param-title">采购单参数</div></summary>
                       <div class="ops-fields">
                       <div class="ops-field field-wide"><label for="poOrderNo">采购单号</label><input id="poOrderNo" placeholder="PO..." /></div>
-                      <div class="ops-field field-wide"><label class="has-chip" for="poSupplierPick">供应商 <span id="chipPoSupplierPick" class="select-chip">已选</span></label><select id="poSupplierPick"><option value="">选择供应商</option></select><div id="boxQuickAddSupplier" class="row" style="display:none;margin-top:4px;gap:6px;"><input id="inputQuickAddSupplierCode" placeholder="编码（可选）" style="max-width:120px;" /><input id="inputQuickAddSupplierName" placeholder="供应商名称" style="min-width:140px;" /><button type="button" id="btnConfirmQuickAddSupplier">确定</button><button type="button" class="secondary" id="btnCancelQuickAddSupplier">取消</button></div></div>
+                      <div class="ops-field field-wide"><label class="has-chip" for="poSupplierPick">供应商 <span id="chipPoSupplierPick" class="select-chip">已选</span></label><select id="poSupplierPick"><option value="">选择供应商</option></select><div id="boxQuickAddSupplier" class="row mt-6" style="display:none;gap:6px;"><input id="inputQuickAddSupplierCode" class="w-120" placeholder="编码（可选）" /><input id="inputQuickAddSupplierName" class="minw-140" placeholder="供应商名称" /><button type="button" id="btnConfirmQuickAddSupplier">确定</button><button type="button" class="secondary" id="btnCancelQuickAddSupplier">取消</button></div></div>
                       <div class="ops-field field-wide"><label class="has-chip" for="poProductPick">商品 <span id="chipPoProductPick" class="select-chip">已选</span></label><select id="poProductPick"><option value="">选择商品</option></select></div>
                       <input id="poProductId" type="hidden" />
                       <div class="ops-field field-narrow"><label for="poQty">数量</label><input id="poQty" type="number" step="0.01" min="0.0001" placeholder="如 100" /></div>
@@ -749,6 +1392,7 @@
                       <div class="ops-field ops-field-action"><label>操作</label><button id="btnConfirmPurchase">确定</button></div>
                       </div>
                       <div id="poAutoHint" class="muted" style="margin-top:6px;font-size:12px;"></div>
+                      <div id="poActionFeedback" class="inline-action-feedback"></div>
                     </details>
                   </div>
                   <div class="ops-param-card" id="paramCardSales">
@@ -756,7 +1400,7 @@
                       <summary><div class="ops-param-title">销售单参数</div></summary>
                       <div class="ops-fields">
                       <div class="ops-field field-wide"><label for="soOrderNo">销售单号</label><input id="soOrderNo" placeholder="SO..." /></div>
-                      <div class="ops-field field-wide"><label class="has-chip" for="soCustomerPick">客户 <span id="chipSoCustomerPick" class="select-chip">已选</span></label><select id="soCustomerPick"><option value="">选择客户</option></select><div id="boxQuickAddCustomerSales" class="row" style="display:none;margin-top:4px;gap:6px;"><input id="inputQuickAddCustomerSalesCode" placeholder="编码（可选）" style="max-width:120px;" /><input id="inputQuickAddCustomerSalesName" placeholder="客户名称" style="min-width:140px;" /><button type="button" id="btnConfirmQuickAddCustomerSales">确定</button><button type="button" class="secondary" id="btnCancelQuickAddCustomerSales">取消</button></div></div>
+                      <div class="ops-field field-wide"><label class="has-chip" for="soCustomerPick">客户 <span id="chipSoCustomerPick" class="select-chip">已选</span></label><select id="soCustomerPick"><option value="">选择客户</option></select><div id="boxQuickAddCustomerSales" class="row mt-6" style="display:none;gap:6px;"><input id="inputQuickAddCustomerSalesCode" class="w-120" placeholder="编码（可选）" /><input id="inputQuickAddCustomerSalesName" class="minw-140" placeholder="客户名称" /><button type="button" id="btnConfirmQuickAddCustomerSales">确定</button><button type="button" class="secondary" id="btnCancelQuickAddCustomerSales">取消</button></div></div>
                       <div class="ops-field field-wide"><label class="has-chip" for="soProductPick">商品 <span id="chipSoProductPick" class="select-chip">已选</span></label><select id="soProductPick"><option value="">选择商品</option></select></div>
                       <input id="soProductId" type="hidden" />
                       <div class="ops-field field-narrow"><label for="soQty">数量</label><input id="soQty" type="number" step="0.01" min="0.0001" placeholder="如 20" /></div>
@@ -764,6 +1408,7 @@
                       <div class="ops-field ops-field-action"><label>操作</label><button id="btnConfirmSales">确定</button></div>
                       </div>
                       <div id="soPreviewHint" class="muted" style="margin-top:6px;font-size:12px;"></div>
+                      <div id="soActionFeedback" class="inline-action-feedback"></div>
                     </details>
                   </div>
                   <div class="ops-param-card" id="paramCardReceipt">
@@ -771,13 +1416,15 @@
                       <summary><div class="ops-param-title">收款单参数</div></summary>
                       <div class="ops-fields">
                       <div class="ops-field field-wide"><label for="rcNo">收款单号</label><input id="rcNo" placeholder="RC..." /></div>
-                      <div class="ops-field field-wide"><label class="has-chip" for="rcCustomerPick">客户 <span id="chipRcCustomerPick" class="select-chip">已选</span></label><select id="rcCustomerPick"><option value="">选择客户</option></select><div id="boxQuickAddCustomerReceipt" class="row" style="display:none;margin-top:4px;gap:6px;"><input id="inputQuickAddCustomerReceiptCode" placeholder="编码（可选）" style="max-width:120px;" /><input id="inputQuickAddCustomerReceiptName" placeholder="客户名称" style="min-width:140px;" /><button type="button" id="btnConfirmQuickAddCustomerReceipt">确定</button><button type="button" class="secondary" id="btnCancelQuickAddCustomerReceipt">取消</button></div></div>
+                      <div class="ops-field field-wide"><label class="has-chip" for="rcCustomerPick">客户 <span id="chipRcCustomerPick" class="select-chip">已选</span></label><select id="rcCustomerPick"><option value="">选择客户</option></select><div id="boxQuickAddCustomerReceipt" class="row mt-6" style="display:none;gap:6px;"><input id="inputQuickAddCustomerReceiptCode" class="w-120" placeholder="编码（可选）" /><input id="inputQuickAddCustomerReceiptName" class="minw-140" placeholder="客户名称" /><button type="button" id="btnConfirmQuickAddCustomerReceipt">确定</button><button type="button" class="secondary" id="btnCancelQuickAddCustomerReceipt">取消</button></div></div>
                       <div class="ops-field field-wide"><label class="has-chip" for="rcArPick">应收单据 <span id="chipRcArPick" class="select-chip">已选</span></label><select id="rcArPick"><option value="">自动匹配未结应收</option></select></div>
                       <input id="rcArInvoiceId" type="hidden" />
                       <div class="ops-field field-narrow"><label for="rcAmount">收款金额</label><input id="rcAmount" type="number" step="0.01" min="0.01" placeholder="如 100" /></div>
+                      <div class="ops-field field-wide"><label>金额快捷</label><div class="row"><button type="button" class="secondary" id="btnRcAmountFull">全额</button><button type="button" class="secondary" id="btnRcAmountHalf">50%</button><button type="button" class="secondary" id="btnRcAmountClear">清零</button></div></div>
                       <div class="ops-field ops-field-action"><label>操作</label><button id="btnConfirmReceipt">确定</button></div>
                       </div>
                       <div id="rcPreviewHint" class="muted" style="margin-top:6px;font-size:12px;"></div>
+                      <div id="rcActionFeedback" class="inline-action-feedback"></div>
                     </details>
                   </div>
                   <div class="ops-param-card" id="paramCardPayment">
@@ -785,13 +1432,15 @@
                       <summary><div class="ops-param-title">付款单参数</div></summary>
                       <div class="ops-fields">
                       <div class="ops-field field-wide"><label for="pyNo">付款单号</label><input id="pyNo" placeholder="PY..." /></div>
-                      <div class="ops-field field-wide"><label class="has-chip" for="pySupplierPick">供应商 <span id="chipPySupplierPick" class="select-chip">已选</span></label><select id="pySupplierPick"><option value="">选择供应商</option></select><div id="boxQuickAddSupplierPayment" class="row" style="display:none;margin-top:4px;gap:6px;"><input id="inputQuickAddSupplierPaymentCode" placeholder="编码（可选）" style="max-width:120px;" /><input id="inputQuickAddSupplierPaymentName" placeholder="供应商名称" style="min-width:140px;" /><button type="button" id="btnConfirmQuickAddSupplierPayment">确定</button><button type="button" class="secondary" id="btnCancelQuickAddSupplierPayment">取消</button></div></div>
+                      <div class="ops-field field-wide"><label class="has-chip" for="pySupplierPick">供应商 <span id="chipPySupplierPick" class="select-chip">已选</span></label><select id="pySupplierPick"><option value="">选择供应商</option></select><div id="boxQuickAddSupplierPayment" class="row mt-6" style="display:none;gap:6px;"><input id="inputQuickAddSupplierPaymentCode" class="w-120" placeholder="编码（可选）" /><input id="inputQuickAddSupplierPaymentName" class="minw-140" placeholder="供应商名称" /><button type="button" id="btnConfirmQuickAddSupplierPayment">确定</button><button type="button" class="secondary" id="btnCancelQuickAddSupplierPayment">取消</button></div></div>
                       <div class="ops-field field-wide"><label class="has-chip" for="pyApPick">应付单据 <span id="chipPyApPick" class="select-chip">已选</span></label><select id="pyApPick"><option value="">自动匹配未结应付</option></select></div>
                       <input id="pyApBillId" type="hidden" />
                       <div class="ops-field field-narrow"><label for="pyAmount">付款金额</label><input id="pyAmount" type="number" step="0.01" min="0.01" placeholder="如 200" /></div>
+                      <div class="ops-field field-wide"><label>金额快捷</label><div class="row"><button type="button" class="secondary" id="btnPyAmountFull">全额</button><button type="button" class="secondary" id="btnPyAmountHalf">50%</button><button type="button" class="secondary" id="btnPyAmountClear">清零</button></div></div>
                       <div class="ops-field ops-field-action"><label>操作</label><button id="btnConfirmPayment">确定</button></div>
                       </div>
                       <div id="pyPreviewHint" class="muted" style="margin-top:6px;font-size:12px;"></div>
+                      <div id="pyActionFeedback" class="inline-action-feedback"></div>
                     </details>
                   </div>
                   </div>
@@ -801,12 +1450,130 @@
               <section class="card" style="margin-top:8px;">
                 <h3 class="section-title">商品创建</h3>
                 <div class="row" style="margin-top:6px;align-items:flex-end;">
-                  <input id="newProductSku" placeholder="SKU（≥2字）" style="max-width:130px" />
-                  <input id="newProductName" placeholder="名称（≥2字）" style="min-width:140px" />
-                  <input id="newProductUnit" placeholder="单位" style="max-width:90px" />
-                  <input id="newProductCost" type="number" step="0.01" min="0" placeholder="成本价" style="max-width:100px" />
-                  <input id="newProductSale" type="number" step="0.01" min="0" placeholder="销售价" style="max-width:100px" />
+                  <input id="newProductSku" class="w-130" placeholder="SKU（≥2字）" />
+                  <input id="newProductName" class="minw-140" placeholder="名称（≥2字）" />
+                  <input id="newProductUnit" class="w-90" placeholder="单位" />
+                  <input id="newProductCost" class="w-100" type="number" step="0.01" min="0" placeholder="成本价" />
+                  <input id="newProductSale" class="w-100" type="number" step="0.01" min="0" placeholder="销售价" />
                   <button id="btnProductAdd" type="button">新增商品</button>
+                </div>
+              </section>
+              <section class="card" style="margin-top:8px;">
+                <h3 class="section-title">仓库 & 库位管理</h3>
+                <div class="muted" style="margin-bottom:6px;">用于维护仓库与库位；创建后会自动刷新执行区下拉。</div>
+                <div class="row" style="margin-top:6px;align-items:flex-end;">
+                  <input id="newWarehouseCode" class="w-160" placeholder="仓库编码（≥2字）" />
+                  <input id="newWarehouseName" class="minw-180" placeholder="仓库名称（≥2字）" />
+                  <button id="btnWarehouseCreate" type="button">创建仓库</button>
+                </div>
+                <div id="whSuggestBox" class="suggest-popover" role="listbox" aria-label="已有仓库列表"></div>
+                <div class="row" style="margin-top:6px;align-items:flex-end;">
+                  <select id="newLocationWarehousePick" class="minw-220"><option value="">选择仓库</option></select>
+                  <input id="newLocationCode" class="w-160" placeholder="库位编码（≥2字）" />
+                  <input id="newLocationName" class="minw-180" placeholder="库位名称（≥2字）" />
+                  <button id="btnLocationCreate" type="button">创建库位</button>
+                </div>
+                <div id="locSuggestBox" class="suggest-popover" role="listbox" aria-label="已有库位列表"></div>
+                <div id="whLocActionFeedback" class="inline-action-feedback"></div>
+              </section>
+              <section class="card" style="margin-top:8px;">
+                <h3 class="section-title">采购执行（收货 / 退货）</h3>
+                <div class="row exec-row" style="margin-top:6px;">
+                  <select id="execPurchaseOrderPick"><option value="">选择已审批采购订单</option></select>
+                  <input id="execPurchaseOrderId" type="number" min="1" placeholder="采购订单ID" />
+                  <select id="execPurchaseProductPick"><option value="">选择商品</option></select>
+                  <input id="execPurchaseQty" type="number" step="0.01" min="0.01" placeholder="数量" />
+                  <select id="execPurchaseWarehousePick"><option value="">仓库（可选）</option></select>
+                  <select id="execPurchaseLocationPick"><option value="">库位（可选）</option></select>
+                  <input id="execPurchaseBatchNo" placeholder="批次号（可选）" />
+                  <div class="exec-actions">
+                    <button id="btnCreateReceiptFlow" type="button">采购收货</button>
+                    <button class="danger" id="btnCreatePurchaseReturnFlow" type="button">采购退货</button>
+                  </div>
+                </div>
+                <div id="execPurchaseFeedback" class="inline-action-feedback"></div>
+              </section>
+              <section class="card" style="margin-top:8px;">
+                <h3 class="section-title">销售执行（发货 / 退货）</h3>
+                <div class="row exec-row" style="margin-top:6px;">
+                  <select id="execSalesOrderPick"><option value="">选择已审批销售订单</option></select>
+                  <input id="execSalesOrderId" type="number" min="1" placeholder="销售订单ID" />
+                  <select id="execSalesProductPick"><option value="">选择商品</option></select>
+                  <input id="execSalesQty" type="number" step="0.01" min="0.01" placeholder="数量" />
+                  <select id="execSalesWarehousePick"><option value="">仓库（可选）</option></select>
+                  <select id="execSalesLocationPick"><option value="">库位（可选）</option></select>
+                  <input id="execSalesBatchNo" placeholder="批次号（可选）" />
+                  <div class="exec-actions">
+                    <button id="btnCreateDeliveryFlow" type="button">销售发货</button>
+                    <button class="danger" id="btnCreateSalesReturnFlow" type="button">销售退货</button>
+                  </div>
+                </div>
+                <div id="execSalesFeedback" class="inline-action-feedback"></div>
+              </section>
+              <section class="card" style="margin-top:8px;">
+                <h3 class="section-title">业务影响速查</h3>
+                <div class="muted" style="line-height:1.6;">
+                  采购：创建单据（仅订单）→ 审批通过（应付未付增加）→ 采购收货（库存增加、剩余未收减少）→ 采购付款（应付未付减少）。<br />
+                  销售：创建单据（仅订单）→ 审批通过（应收未收增加）→ 销售发货（库存减少、剩余未发减少）→ 销售收款（应收未收减少）。<br />
+                  退货：采购退货通常冲减库存与应付口径；销售退货通常回补库存并冲回应收/收入口径。
+                </div>
+              </section>
+              <section class="card" style="margin-top:8px;">
+                <h3 class="section-title">催办列表（单号）</h3>
+                <div class="row" style="margin-top:6px;">
+                  <button class="danger" id="btnRemindReceipts" type="button">催收货（采购）</button>
+                  <button class="danger" id="btnRemindDeliveries" type="button">催发货（销售）</button>
+                  <span class="muted" style="margin-left:6px;">规则：超期 ≥ 2 天标黄；超期 ≥ 7 天标红（默认规则）。</span>
+                </div>
+                <div class="reminder-grid" style="margin-top:8px;">
+                  <div>
+                    <div class="row" style="margin-bottom:6px;align-items:center;">
+                      <div class="muted" style="flex:1;">催收货：已审批但未完全收货</div>
+                      <input id="filterRemindReceipts" placeholder="按 单号/ID 搜索" style="max-width:220px;" />
+                      <select id="sortRemindReceipts" style="max-width:170px">
+                        <option value="age_desc">按超期：高到低</option>
+                        <option value="qty_desc">按剩余量：高到低</option>
+                      </select>
+                    </div>
+                    <div id="remindReceiptsTable" class="table-wrap"></div>
+                    <div class="pager" id="pagerRemindReceipts">
+                      <button class="secondary" id="btnRemindReceiptsPrev" type="button">上一页</button>
+                      <button class="secondary" id="btnRemindReceiptsNext" type="button">下一页</button>
+                      <select id="remindReceiptsPageSize" style="max-width:90px">
+                        <option value="10" selected>10/页</option>
+                        <option value="20">20/页</option>
+                        <option value="50">50/页</option>
+                        <option value="100">100/页</option>
+                      </select>
+                      <input id="remindReceiptsPageJump" type="number" min="1" placeholder="页码" style="max-width:80px" />
+                      <button class="secondary" id="btnRemindReceiptsJump" type="button">跳转</button>
+                      <span id="remindReceiptsPagerInfo" class="muted">分页：-</span>
+                    </div>
+                  </div>
+                  <div>
+                    <div class="row" style="margin-bottom:6px;align-items:center;">
+                      <div class="muted" style="flex:1;">催发货：已审批但未完全发货</div>
+                      <input id="filterRemindDeliveries" placeholder="按 单号/ID 搜索" style="max-width:220px;" />
+                      <select id="sortRemindDeliveries" style="max-width:170px">
+                        <option value="age_desc">按超期：高到低</option>
+                        <option value="qty_desc">按剩余量：高到低</option>
+                      </select>
+                    </div>
+                    <div id="remindDeliveriesTable" class="table-wrap"></div>
+                    <div class="pager" id="pagerRemindDeliveries">
+                      <button class="secondary" id="btnRemindDeliveriesPrev" type="button">上一页</button>
+                      <button class="secondary" id="btnRemindDeliveriesNext" type="button">下一页</button>
+                      <select id="remindDeliveriesPageSize" style="max-width:90px">
+                        <option value="10" selected>10/页</option>
+                        <option value="20">20/页</option>
+                        <option value="50">50/页</option>
+                        <option value="100">100/页</option>
+                      </select>
+                      <input id="remindDeliveriesPageJump" type="number" min="1" placeholder="页码" style="max-width:80px" />
+                      <button class="secondary" id="btnRemindDeliveriesJump" type="button">跳转</button>
+                      <span id="remindDeliveriesPagerInfo" class="muted">分页：-</span>
+                    </div>
+                  </div>
                 </div>
               </section>
             </section>
@@ -827,40 +1594,72 @@
             </section>
 
             <section class="panel" id="panelApproval">
-              <div class="row">
-                <button class="secondary" id="btnLoadPoApprovals">采购单列表</button>
-                <button class="secondary" id="btnLoadSoApprovals">销售单列表</button>
-                <button class="secondary" id="btnLoadPendingApprovals">我的待审批</button>
-                <button class="secondary" id="btnLoadApprovalSla">审批SLA</button>
-                <select id="approvalStatusFilter" style="max-width:180px">
-                  <option value="all">状态：全部</option>
-                  <option value="draft">仅草稿</option>
-                  <option value="submitted">仅已提交</option>
-                  <option value="approved">仅已审批</option>
-                  <option value="rejected">仅驳回</option>
-                  <option value="voided">仅作废</option>
-                  <option value="reversed">仅冲销</option>
-                </select>
-                <label class="muted" style="display:flex;align-items:center;gap:6px;">
-                  <input id="chkApprovalActionableOnly" type="checkbox" />
-                  <span>只看我可操作</span>
-                </label>
+              <div class="approval-block">
+                <div class="approval-row">
+                  <span class="row-title">视图</span>
+                  <button class="secondary" id="btnLoadPoApprovals">采购单列表</button>
+                  <button class="secondary" id="btnLoadSoApprovals">销售单列表</button>
+                  <button class="secondary" id="btnLoadPendingApprovals">我的待审批</button>
+                  <button class="secondary" id="btnLoadAbnormalApprovals">异常单据</button>
+                </div>
+                <div class="approval-row">
+                  <span class="row-title">筛选</span>
+                  <input id="approvalSearch" placeholder="搜索：ID/单号/客户/供应商" />
+                  <select id="approvalStageFilter" style="max-width:190px">
+                    <option value="all">阶段：全部</option>
+                    <option value="todo">待执行</option>
+                    <option value="doing">执行中</option>
+                    <option value="wait_settle">已执行待结算</option>
+                    <option value="settling">结算中</option>
+                    <option value="done">已完成</option>
+                    <option value="abnormal">异常</option>
+                  </select>
+                  <select id="approvalStatusFilter" style="max-width:180px">
+                    <option value="all">状态：全部</option>
+                    <option value="draft">仅草稿</option>
+                    <option value="submitted">仅已提交</option>
+                    <option value="approved">仅已审批</option>
+                    <option value="rejected">仅驳回</option>
+                    <option value="voided">仅作废</option>
+                    <option value="reversed">仅冲销</option>
+                  </select>
+                  <select id="approvalSort" style="max-width:170px">
+                    <option value="id_desc">排序：最新</option>
+                    <option value="stage_abnormal_first">异常优先</option>
+                  </select>
+                  <label class="muted" style="display:flex;align-items:center;gap:6px;">
+                    <input id="chkApprovalActionableOnly" type="checkbox" />
+                    <span>只看我可操作</span>
+                  </label>
+                </div>
+                <div class="approval-row" style="align-items:flex-end;">
+                  <span class="row-title">批量</span>
+                  <input id="approvalBatchIds" placeholder="批量审批ID（逗号分隔，如 101,102）" />
+                  <button class="secondary" id="btnSelectAllApprovalRows">勾选当前页</button>
+                  <button class="secondary" id="btnFillBatchIds">填充当前筛选ID</button>
+                  <button class="secondary" id="btnBatchApprove">批量通过</button>
+                  <button class="secondary" id="btnBatchReject">批量驳回</button>
+                </div>
+                <details class="approval-more">
+                  <summary>更多操作</summary>
+                  <div class="approval-row" style="margin-top:8px;">
+                    <span class="row-title">扩展</span>
+                    <button class="secondary" id="btnLoadApprovalSla">审批SLA</button>
+                    <button class="secondary" id="btnJumpAbnormal">定位异常原因</button>
+                  </div>
+                </details>
+                <details class="approval-more">
+                  <summary>状态说明</summary>
+                  <div class="muted" style="margin-top:8px;line-height:1.6;">
+                    审批状态：草稿 → 已提交 → 已审批 / 已驳回（可再次提交）。<br />
+                    执行状态：待执行 / 执行中 / 已执行待结算。<br />
+                    结算状态：未收未付 / 结算中 / 已完成。<br />
+                    阶段列：综合审批、执行、结算三维口径，异常代表流程顺序不一致（如未发先收）。
+                  </div>
+                </details>
               </div>
               <div class="row" id="approvalSlaCards"></div>
               <input id="approvalOrderId" type="hidden" />
-              <div class="row" id="approvalRejectRow" style="display:none;">
-                <input id="approvalComment" placeholder="请填写驳回意见（必填）" />
-                <button type="button" id="btnConfirmRejectInput">确定</button>
-                <button type="button" class="secondary" id="btnCancelRejectInput">取消驳回</button>
-              </div>
-              <div class="row">
-                <button id="btnSubmitApproval">提交</button>
-                <button id="btnApproveApproval">通过</button>
-                <button class="secondary" id="btnRejectApproval">驳回</button>
-                <button class="secondary" id="btnVoidApproval">作废</button>
-                <button class="danger" id="btnReverseApproval">冲销</button>
-              </div>
-              <div id="approvalActionHint" class="warn" style="display:none;margin-top:6px;"></div>
               <div class="row" style="align-items: center; gap: 10px; flex-wrap: wrap">
                 <span id="approvalContextLabel" class="muted" style="font-size: 13px">当前：采购单（动作发往 <code>/api/purchase-orders/:id/action</code>）</span>
                 <span id="approvalViewLabel" class="muted" style="font-size: 13px">视图：未加载</span>
@@ -869,30 +1668,78 @@
                 <button type="button" class="secondary" id="btnCopyApprovalDetailCurl">复制详情命令</button>
               </div>
               <div class="split" style="margin-top:8px;">
-                <div>
-                  <div id="approvalTable" class="table-wrap"></div>
-                  <div class="row" style="margin-top:8px;">
-                    <button class="secondary" id="btnLoadOverdueApprovals">超时待审批(24h)</button>
-                    <button class="secondary" id="btnLoadTimeline">查看审批时间轴</button>
-                  </div>
-                  <div id="approvalOverdueTable" class="table-wrap" style="margin-top:8px;"></div>
-                </div>
                 <aside class="split-side">
                   <div class="drawer">
                     <div class="muted">审批单据详情（点击左侧某一行）</div>
-                    <pre id="approvalDetail">尚未选择审批单据。</pre>
+                    <div id="approvalDetail">尚未选择审批单据。</div>
                   </div>
                   <div class="drawer">
                     <div class="muted">审批时间轴（输入单据ID并点击“查看审批时间轴”）</div>
+                    <div class="row" style="margin-top:6px;">
+                      <button class="secondary" id="btnLoadTimeline">查看审批时间轴</button>
+                    </div>
                     <div id="approvalTimeline" class="muted">尚未加载审批时间轴。</div>
                   </div>
                 </aside>
+                <div class="approval-main-stack">
+                  <div class="approval-list-card">
+                    <div class="approval-list-title">审批列表（主视图）</div>
+                    <div class="row" style="margin-bottom:6px; align-items:flex-end;">
+                      <span class="row-title">单条</span>
+                      <button id="btnSubmitApproval">提交</button>
+                      <button id="btnApproveApproval">通过</button>
+                      <button class="secondary" id="btnRejectApproval">驳回</button>
+                      <button class="secondary" id="btnVoidApproval">作废</button>
+                      <button class="danger" id="btnReverseApproval">冲销</button>
+                    </div>
+                    <div class="row" id="approvalRejectRow" style="display:none; margin-bottom:6px;">
+                      <input id="approvalComment" placeholder="请填写驳回意见（必填）" />
+                      <button type="button" id="btnConfirmRejectInput">确定</button>
+                      <button type="button" class="secondary" id="btnCancelRejectInput">取消驳回</button>
+                    </div>
+                    <div id="approvalActionHint" class="warn" style="display:none;margin:0 0 6px 0;"></div>
+                    <div id="approvalTable" class="table-wrap"></div>
+                    <div class="pager" id="pagerApproval">
+                      <button class="secondary" id="btnApprovalPrev" type="button">上一页</button>
+                      <button class="secondary" id="btnApprovalNext" type="button">下一页</button>
+                      <select id="approvalPageSize" style="max-width:90px">
+                        <option value="10" selected>10/页</option>
+                        <option value="20">20/页</option>
+                        <option value="50">50/页</option>
+                        <option value="100">100/页</option>
+                      </select>
+                      <input id="approvalPageJump" type="number" min="1" placeholder="页码" style="max-width:80px" />
+                      <button class="secondary" id="btnApprovalJump" type="button">跳转</button>
+                      <span id="approvalPagerInfo" class="muted">分页：-</span>
+                    </div>
+                  </div>
+                  <details class="approval-overdue approval-list-card">
+                    <summary>超时待审批（次要视图，可展开）</summary>
+                    <div class="row" style="margin-top:4px;">
+                      <button class="secondary" id="btnLoadOverdueApprovals">加载超时待审批(24h)</button>
+                    </div>
+                    <div id="approvalOverdueTable" class="table-wrap" style="margin-top:6px;"></div>
+                  </details>
+                </div>
               </div>
             </section>
 
             <section class="panel" id="panelAr">
               <div class="row">
                 <input id="filterAr" placeholder="按 发票/客户/状态 筛选" />
+                <select id="arStageFilter" style="max-width:180px">
+                  <option value="all">阶段：全部</option>
+                  <option value="todo">待执行</option>
+                  <option value="doing">执行中</option>
+                  <option value="wait_settle">已执行待结算</option>
+                  <option value="settling">结算中</option>
+                  <option value="done">已完成</option>
+                  <option value="abnormal">异常</option>
+                </select>
+                <select id="arSort" style="max-width:170px">
+                  <option value="id_desc">排序：最新</option>
+                  <option value="stage_abnormal_first">异常优先</option>
+                </select>
                 <button class="secondary" id="btnAr">刷新应收</button>
                 <button class="secondary" id="btnExportAr">导出 CSV</button>
               </div>
@@ -908,6 +1755,19 @@
             <section class="panel" id="panelAp">
               <div class="row">
                 <input id="filterAp" placeholder="按 账单/供应商/状态 筛选" />
+                <select id="apStageFilter" style="max-width:180px">
+                  <option value="all">阶段：全部</option>
+                  <option value="todo">待执行</option>
+                  <option value="doing">执行中</option>
+                  <option value="wait_settle">已执行待结算</option>
+                  <option value="settling">结算中</option>
+                  <option value="done">已完成</option>
+                  <option value="abnormal">异常</option>
+                </select>
+                <select id="apSort" style="max-width:170px">
+                  <option value="id_desc">排序：最新</option>
+                  <option value="stage_abnormal_first">异常优先</option>
+                </select>
                 <button class="secondary" id="btnAp">刷新应付</button>
                 <button class="secondary" id="btnExportAp">导出 CSV</button>
               </div>
@@ -936,7 +1796,7 @@
                 <aside class="split-side">
                   <div class="drawer">
                     <div class="muted">凭证明细（点击左侧某一行）</div>
-                    <pre id="journalDetail">尚未选择凭证。</pre>
+                    <div id="journalDetail" class="journal-detail-view muted">尚未选择凭证。</div>
                   </div>
                 </aside>
               </div>
@@ -944,10 +1804,20 @@
 
             <section class="panel" id="panelTrend">
               <div class="row">
+                <select id="trendDays" class="w-120">
+                  <option value="14" selected>最近14天</option>
+                  <option value="30">最近30天</option>
+                  <option value="60">最近60天</option>
+                </select>
+                <select id="trendViewMode" class="w-160">
+                  <option value="all" selected>视图：全部</option>
+                  <option value="trade">视图：销采</option>
+                  <option value="cash">视图：收付</option>
+                </select>
                 <button class="secondary" id="btnTrend">刷新趋势</button>
               </div>
-              <div class="muted">最近14天交易趋势（销售/采购/收款/付款）。</div>
-              <div id="trendChart" class="trend" style="margin-top:8px;"></div>
+              <div id="trendHint" class="muted">最近14天交易趋势（销售/采购/收款/付款）。</div>
+              <div id="trendChart" class="trend mt-8"></div>
             </section>
 
             <section class="panel" id="panelAudit">
@@ -976,12 +1846,16 @@
       <section class="card logs" id="logsSection">
         <div class="toolbar">
           <h3 class="section-title" style="margin:0;">日志输出</h3>
-          <button class="ghost" id="btnClearLogs">清空日志</button>
+          <div class="row" style="margin:0;gap:8px;justify-content:flex-end;">
+            <button class="secondary" id="btnDataChecks" type="button">一致性检查</button>
+            <button class="ghost" id="btnClearLogs">清空日志</button>
+          </div>
         </div>
         <pre id="output"></pre>
       </section>
     </div>
 
     <script src="/app/app.js"></script>
+    <div id="actionToast" class="action-toast" role="status" aria-live="polite"></div>
   </body>
 </html>

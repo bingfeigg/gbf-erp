@@ -12,6 +12,7 @@ const state = {
 };
 const STORAGE_SESSION_KEY = "gbf_erp_session_v1";
 const STORAGE_PANEL_KEY = "gbf_erp_panel_v1";
+const STORAGE_PAGER_PREF_KEY = "gbf_erp_pager_pref_v1";
 
 const output = document.getElementById("output");
 const loginStatus = document.getElementById("loginStatus");
@@ -27,11 +28,17 @@ const notificationBar = document.getElementById("notificationBar");
 const roleTodoHint = document.getElementById("roleTodoHint");
 const roleTodoList = document.getElementById("roleTodoList");
 const trendChart = document.getElementById("trendChart");
+const trendDays = document.getElementById("trendDays");
+const trendViewMode = document.getElementById("trendViewMode");
+const trendHint = document.getElementById("trendHint");
 const journalDetail = document.getElementById("journalDetail");
 const productDetail = document.getElementById("productDetail");
 const arDetail = document.getElementById("arDetail");
 const apDetail = document.getElementById("apDetail");
 const approvalDetail = document.getElementById("approvalDetail");
+const actionToast = document.getElementById("actionToast");
+const whSuggestBox = document.getElementById("whSuggestBox");
+const locSuggestBox = document.getElementById("locSuggestBox");
 const approvalSlaCards = document.getElementById("approvalSlaCards");
 const approvalOverdueTable = document.getElementById("approvalOverdueTable");
 const approvalTimeline = document.getElementById("approvalTimeline");
@@ -64,6 +71,135 @@ const filters = {
 };
 const cache = { products: [], ar: [], ap: [], journals: [], audit: [], alerts: [], trend: [] };
 const masterPickCache = { suppliers: [], customers: [], products: [] };
+const executionOrderCache = { purchase: [], sales: [] };
+const executionOrderItemsCache = new Map();
+const reminderCache = { receipts: [], deliveries: [] };
+const settlementPickCache = { ar: [], ap: [] };
+let approvalSelectedRow = null;
+const EXEC_BATCH_SEQ_KEY = "gbf_erp_exec_batch_seq_v1";
+const REMINDER_PREF_KEY = "gbf_erp_reminder_pref_v1";
+const serverPager = {
+  ar: { page: 1, pageSize: 10, total: 0 },
+  ap: { page: 1, pageSize: 10, total: 0 },
+  remindReceipts: { page: 1, pageSize: 10, total: 0 },
+  remindDeliveries: { page: 1, pageSize: 10, total: 0 }
+};
+
+function invalidateExecutionOrderItems(orderType, orderId) {
+  const key = `${orderType}:${orderId}`;
+  executionOrderItemsCache.delete(key);
+}
+
+function loadBatchSeqState() {
+  try {
+    const raw = localStorage.getItem(EXEC_BATCH_SEQ_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (_e) {
+    return {};
+  }
+}
+
+function saveBatchSeqState(stateObj) {
+  try {
+    localStorage.setItem(EXEC_BATCH_SEQ_KEY, JSON.stringify(stateObj || {}));
+  } catch (_e) {
+    // ignore
+  }
+}
+
+function loadReminderPrefs() {
+  const defaults = { warnDays: 2, dangerDays: 7 };
+  try {
+    const raw = localStorage.getItem(REMINDER_PREF_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return {
+      warnDays: Math.max(1, Number(parsed.warnDays || defaults.warnDays)),
+      dangerDays: Math.max(1, Number(parsed.dangerDays || defaults.dangerDays))
+    };
+  } catch (_e) {
+    return defaults;
+  }
+}
+
+function saveReminderPrefs(prefs) {
+  try {
+    localStorage.setItem(REMINDER_PREF_KEY, JSON.stringify(prefs));
+  } catch (_e) {
+    // ignore
+  }
+}
+
+function loadPagerPrefs() {
+  try {
+    const raw = localStorage.getItem(STORAGE_PAGER_PREF_KEY);
+    const p = raw ? JSON.parse(raw) : {};
+    return {
+      approvalPageSize: Math.max(1, Number(p.approvalPageSize || 10)),
+      arPageSize: Math.max(1, Number(p.arPageSize || 10)),
+      apPageSize: Math.max(1, Number(p.apPageSize || 10)),
+      remindReceiptsPageSize: Math.max(1, Number(p.remindReceiptsPageSize || 10)),
+      remindDeliveriesPageSize: Math.max(1, Number(p.remindDeliveriesPageSize || 10))
+    };
+  } catch (_e) {
+    return {
+      approvalPageSize: 10,
+      arPageSize: 10,
+      apPageSize: 10,
+      remindReceiptsPageSize: 10,
+      remindDeliveriesPageSize: 10
+    };
+  }
+}
+
+function savePagerPrefs() {
+  try {
+    localStorage.setItem(
+      STORAGE_PAGER_PREF_KEY,
+      JSON.stringify({
+        approvalPageSize: approvalPager.pageSize,
+        arPageSize: serverPager.ar.pageSize,
+        apPageSize: serverPager.ap.pageSize,
+        remindReceiptsPageSize: serverPager.remindReceipts.pageSize,
+        remindDeliveriesPageSize: serverPager.remindDeliveries.pageSize
+      })
+    );
+  } catch (_e) {
+    // ignore
+  }
+}
+
+function batchSeqKey(args) {
+  const { orderType, orderId, productId } = args;
+  return `${orderType}:${orderId}:${productId}`;
+}
+
+function getNextBatchNo(args) {
+  const { orderType, orderId, productId } = args;
+  if (!orderId || !productId) return "";
+  const stateObj = loadBatchSeqState();
+  const key = batchSeqKey({ orderType, orderId, productId });
+  const next = Number(stateObj[key] || 0) + 1;
+  const prefix = orderType === "sales" ? "SB" : "PB";
+  return `${prefix}-${orderId}-${productId}-${next}`;
+}
+
+function bumpBatchSeq(args) {
+  const { orderType, orderId, productId } = args;
+  if (!orderId || !productId) return;
+  const stateObj = loadBatchSeqState();
+  const key = batchSeqKey({ orderType, orderId, productId });
+  const next = Number(stateObj[key] || 0) + 1;
+  stateObj[key] = next;
+  saveBatchSeqState(stateObj);
+}
+
+async function refreshExecutionAfterAction(orderType, orderId) {
+  invalidateExecutionOrderItems(orderType, orderId);
+  const batchInput = document.getElementById(orderType === "sales" ? "execSalesBatchNo" : "execPurchaseBatchNo");
+  if (batchInput) batchInput.value = "";
+  await refreshExecutionPicks();
+  await applyExecutionOrderSelection(orderType, orderId);
+}
 let notificationCursor = 0;
 let notificationTimer = null;
 let dashboardTimer = null;
@@ -71,6 +207,9 @@ let approvalType = "purchase";
 let currentApprovalView = "none";
 let approvalRowsCache = [];
 let approvalRowsKind = "purchase";
+const approvalCheckedIds = new Set();
+const executionSubmitting = { purchase: false, sales: false };
+const approvalPager = { page: 1, pageSize: 10, total: 0 };
 const rejectSummaryCache = new Map();
 const tabButtons = Array.from(document.querySelectorAll(".tab"));
 const moduleNavButtons = Array.from(document.querySelectorAll(".module-nav [data-panel]"));
@@ -85,6 +224,85 @@ const panels = {
   panelAudit: document.getElementById("panelAudit"),
   panelAlerts: document.getElementById("panelAlerts")
 };
+
+function renderRemindersTable(targetId, rows, kind) {
+  const target = document.getElementById(targetId);
+  if (!target) return;
+  const filterId = targetId === "remindReceiptsTable" ? "filterRemindReceipts" : "filterRemindDeliveries";
+  const sortId = targetId === "remindReceiptsTable" ? "sortRemindReceipts" : "sortRemindDeliveries";
+  const warnDays = Number(document.getElementById("remindWarnDays")?.value || 2);
+  const dangerDays = Number(document.getElementById("remindDangerDays")?.value || 7);
+  const q = String(document.getElementById(filterId)?.value || "").trim().toLowerCase();
+  let filtered = (rows || []).filter((r) => {
+    if (!q) return true;
+    return String(r.orderNo || "").toLowerCase().includes(q) || String(r.orderId || "").toLowerCase().includes(q);
+  });
+  const sortMode = String(document.getElementById(sortId)?.value || "age_desc");
+  filtered = [...filtered].sort((a, b) => {
+    if (sortMode === "qty_desc") return Number(b.remainingQty || 0) - Number(a.remainingQty || 0);
+    return Number(b.ageDays || 0) - Number(a.ageDays || 0);
+  });
+  if (!filtered.length) {
+    target.innerHTML = "<div class='muted' style='padding:10px;'>暂无数据</div>";
+    return;
+  }
+  renderTable(
+    target,
+    filtered,
+    [
+      { label: "订单ID", getter: (r) => r.orderId },
+      { label: "单号", getter: (r) => r.orderNo || "-" },
+      {
+        label: "剩余数量",
+        getter: (r) => {
+          const v = Number(r.remainingQty || 0);
+          const tone = v >= 100 ? "badge-danger" : v >= 20 ? "badge-warn" : "";
+          return `<span class="badge ${tone}">${v.toFixed(2)}</span>`;
+        }
+      },
+      {
+        label: "超期(天)",
+        getter: (r) => {
+          const d = Number(r.ageDays || 0);
+          const tone = d >= dangerDays ? "badge-danger" : d >= warnDays ? "badge-warn" : "";
+          return `<span class="badge ${tone}">${Number.isFinite(d) ? d : "-"}</span>`;
+        }
+      }
+    ],
+    {
+      clickable: false
+    }
+  );
+  log(kind, { count: (rows || []).length, sample: (rows || []).slice(0, 10) });
+}
+
+async function loadRemindReceipts() {
+  ensureToken();
+  const meta = serverPager.remindReceipts;
+  const payload = await api(`/api/reminders/purchase-receipts?page=${meta.page}&pageSize=${meta.pageSize}`);
+  const { rows, total, page, pageSize } = normalizePagedRows(payload);
+  meta.total = total;
+  meta.page = page;
+  meta.pageSize = pageSize;
+  reminderCache.receipts = rows || [];
+  renderRemindersTable("remindReceiptsTable", rows, "催收货列表");
+  syncSimplePager("remindReceipts", "催收货");
+  showActionOk(`催收货加载完成：${(rows || []).length} 条`);
+}
+
+async function loadRemindDeliveries() {
+  ensureToken();
+  const meta = serverPager.remindDeliveries;
+  const payload = await api(`/api/reminders/sales-deliveries?page=${meta.page}&pageSize=${meta.pageSize}`);
+  const { rows, total, page, pageSize } = normalizePagedRows(payload);
+  meta.total = total;
+  meta.page = page;
+  meta.pageSize = pageSize;
+  reminderCache.deliveries = rows || [];
+  renderRemindersTable("remindDeliveriesTable", rows, "催发货列表");
+  syncSimplePager("remindDeliveries", "催发货");
+  showActionOk(`催发货加载完成：${(rows || []).length} 条`);
+}
 const panelTitles = {
   panelCreate: "单据&商品创建",
   panelApproval: "审批工作台",
@@ -203,37 +421,54 @@ function restoreCurrentPanel() {
 }
 
 function renderTable(target, rows, columns, opts = {}) {
-  if (!rows || rows.length === 0) {
+  let dataRows = rows || [];
+  const totalCount = dataRows.length;
+  const truncated = totalCount > 1200;
+  if (truncated) {
+    dataRows = dataRows.slice(0, 1200);
+  }
+  if (!dataRows || dataRows.length === 0) {
     target.innerHTML = "<div class='muted' style='padding:8px;'>暂无数据</div>";
     return;
   }
   const classifyHeader = (label) => {
     const text = String(label || "");
+    if (text === "选") return "th-check";
+    if (text === "ID") return "th-idcol";
+    if (text === "单号") return "th-orderno";
+    if (text === "阶段") return "th-stage";
+    if (text === "状态") return "th-status";
     if (/(金额|借方|贷方|余额|成本|价格|数量|库存|openAmount|paid|received)/i.test(text)) return "th-amount";
-    if (/(状态|级别|动作|类型)/i.test(text)) return "th-status";
+    if (/(级别|动作|类型)/i.test(text)) return "th-status";
     if (/(时间|日期|created|submitted|approved)/i.test(text)) return "th-time";
     if (/(^ID$|编号|单号|发票号|账单号|凭证号|SKU)/i.test(text)) return "th-id";
     return "";
   };
   const classifyCell = (label) => {
     const text = String(label || "");
+    if (text === "选") return "td-check";
+    if (text === "ID") return "td-idcol";
+    if (text === "单号") return "td-orderno";
+    if (text === "阶段") return "td-stage";
+    if (text === "状态") return "td-status";
     if (/(金额|借方|贷方|余额|成本|价格|数量|库存|openAmount|paid|received)/i.test(text)) return "td-amount";
     if (/(时间|日期|created|submitted|approved)/i.test(text)) return "td-time";
     return "";
   };
+  const stickyFirstCol = opts.stickyFirstCol !== false;
   const header = columns
     .map((c, idx) => {
       const cls = classifyHeader(c.label);
-      const merged = `${cls}${idx === 0 ? " first-col" : ""}`.trim();
+      const merged = `${cls}${idx === 0 && stickyFirstCol ? " first-col" : ""}`.trim();
       return `<th class="${merged}">${c.label}</th>`;
     })
     .join("");
-  const body = rows
+  const body = dataRows
     .map((row, idx) => {
       const cells = columns
         .map((c, colIdx) => {
           const v = c.getter(row);
-          const base = [colIdx === 0 ? "first-col" : "", classifyCell(c.label)].filter(Boolean).join(" ");
+          const base = [colIdx === 0 && stickyFirstCol ? "first-col" : "", classifyCell(c.label)].filter(Boolean).join(" ");
           const cls = base ? ` class="${base}"` : "";
           return `<td${cls}>${v == null ? "" : String(v)}</td>`;
         })
@@ -242,14 +477,17 @@ function renderTable(target, rows, columns, opts = {}) {
       return `<tr ${rowAttr}>${cells}</tr>`;
     })
     .join("");
-  target.innerHTML = `<table><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table>`;
+  const hint = truncated
+    ? `<div class="muted" style="padding:6px 8px;">数据较大，仅渲染前 1200 条（总计 ${totalCount} 条）。请继续使用筛选缩小范围。</div>`
+    : "";
+  target.innerHTML = `${hint}<table><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table>`;
   if (opts.clickable && typeof opts.onRowClick === "function") {
     target.querySelectorAll("tr[data-row-idx]").forEach((tr) => {
       tr.addEventListener("click", () => {
         target.querySelectorAll("tr.row-selected").forEach((el) => el.classList.remove("row-selected"));
         tr.classList.add("row-selected");
         const idx = Number(tr.getAttribute("data-row-idx"));
-        opts.onRowClick(rows[idx]);
+        opts.onRowClick(dataRows[idx]);
       });
     });
   }
@@ -335,15 +573,14 @@ function zhOrderStatus(s) {
 
 function zhApprovalRowStatus(row) {
   const status = String(row?.status || "");
-  if (status === "draft" && row?.rejectedAt) return "草稿（已驳回）";
   return zhOrderStatus(status);
 }
 
 function formatApprovalStatusCell(row) {
   const statusText = zhApprovalRowStatus(row);
-  const isRejectedDraft = String(row?.status || "") === "draft" && Boolean(row?.rejectedAt);
-  if (!isRejectedDraft) return statusText;
-  return `<span style="color:var(--danger);font-weight:700;" title="该单据由驳回回退到草稿">${escapeHtml(statusText)}</span>`;
+  const isRejected = String(row?.status || "") === "rejected";
+  if (!isRejected) return statusText;
+  return `<span style="color:var(--danger);font-weight:700;" title="该单据已驳回">${escapeHtml(statusText)}</span>`;
 }
 
 function fmtMoney(n) {
@@ -501,18 +738,25 @@ async function enrichApprovalRejectSummaries(rows, defaultOrderType) {
 /** 采购单详情（纯文本，便于在侧栏阅读） */
 function formatPoDetail(data, rejectMeta = null) {
   const o = data.order || {};
+  const totalQty = (data.items || []).reduce((s, it) => s + Number(it.qty || 0), 0);
+  const receivedQty = (data.items || []).reduce((s, it) => s + Number(it.receivedQty || 0), 0);
+  const fulfillment = fulfillmentStatusFromQty(totalQty, receivedQty);
+  const stage = combinedStageLabel({ approvalStatus: o.status, fulfillment, settlement: o.paymentStatus, kind: "purchase" });
   const lines = (data.items || []).map(
     (it, i) =>
       [
         `${i + 1}. ${it.sku ?? "-"} / ${it.productName ?? "-"}`,
-        `   数量 ${fmtMoney(it.qty)} | 单价 ${fmtMoney(it.price)} | 小计 ${fmtMoney(it.amount)}`
+        `   数量 ${fmtMoney(it.qty)} | 已收 ${fmtMoney(it.receivedQty ?? 0)} | 单价 ${fmtMoney(it.price)} | 小计 ${fmtMoney(it.amount)}`
       ].join("\n")
   );
   return [
     `采购单 ${o.orderNo ?? "-"}（ID ${o.id ?? "-"}）`,
     `状态：${zhOrderStatus(o.status)}`,
+    `阶段：${stage}`,
     `供应商：${o.supplierName ?? "-"}（${o.supplierCode ?? "-"} / #${o.supplierId ?? "-"}）`,
     `合计金额：${fmtMoney(o.totalAmount)}`,
+    `应付：${zhPaymentStatus(o.paymentStatus)}     未付余额：${fmtMoney(o.billOpenAmount ?? 0)}`,
+    `收货进度：${fmtMoney(receivedQty)} / ${fmtMoney(totalQty)}     剩余未收：${fmtMoney(Math.max(0, totalQty - receivedQty))}`,
     `创建：${o.createdAt ?? "-"}`,
     `提交：${o.submittedAt ?? "-"}`,
     `通过：${o.approvedAt ?? "-"}`,
@@ -528,18 +772,25 @@ function formatPoDetail(data, rejectMeta = null) {
 /** 销售单详情 */
 function formatSoDetail(data, rejectMeta = null) {
   const o = data.order || {};
+  const totalQty = (data.items || []).reduce((s, it) => s + Number(it.qty || 0), 0);
+  const deliveredQty = (data.items || []).reduce((s, it) => s + Number(it.deliveredQty || 0), 0);
+  const fulfillment = fulfillmentStatusFromQty(totalQty, deliveredQty);
+  const stage = combinedStageLabel({ approvalStatus: o.status, fulfillment, settlement: o.receiptStatus, kind: "sales" });
   const lines = (data.items || []).map(
     (it, i) =>
       [
         `${i + 1}. ${it.sku ?? "-"} / ${it.productName ?? "-"}`,
-        `   数量 ${fmtMoney(it.qty)} | 单价 ${fmtMoney(it.price)} | 小计 ${fmtMoney(it.amount)}`
+        `   数量 ${fmtMoney(it.qty)} | 已发 ${fmtMoney(it.deliveredQty ?? 0)} | 单价 ${fmtMoney(it.price)} | 小计 ${fmtMoney(it.amount)}`
       ].join("\n")
   );
   return [
     `销售单 ${o.orderNo ?? "-"}（ID ${o.id ?? "-"}）`,
     `状态：${zhOrderStatus(o.status)}`,
+    `阶段：${stage}`,
     `客户：${o.customerName ?? "-"}（${o.customerCode ?? "-"} / #${o.customerId ?? "-"}）`,
     `合计金额：${fmtMoney(o.totalAmount)}`,
+    `应收：${zhReceiptStatus(o.receiptStatus)}     未收余额：${fmtMoney(o.invoiceOpenAmount ?? 0)}`,
+    `发货进度：${fmtMoney(deliveredQty)} / ${fmtMoney(totalQty)}     剩余未发：${fmtMoney(Math.max(0, totalQty - deliveredQty))}`,
     `创建：${o.createdAt ?? "-"}`,
     `提交：${o.submittedAt ?? "-"}`,
     `通过：${o.approvedAt ?? "-"}`,
@@ -551,6 +802,146 @@ function formatSoDetail(data, rejectMeta = null) {
     `共 ${(data.items || []).length} 行`
   ].join("\n");
 }
+
+function renderApprovalDetailHtml(orderType, data, rejectMeta = null) {
+  const o = data?.order || {};
+  const isSales = orderType === "sales";
+  const items = Array.isArray(data?.items) ? data.items : [];
+  const totalQty = items.reduce((s, it) => s + Number(it.qty || 0), 0);
+  const doneQty = items.reduce((s, it) => s + Number(isSales ? it.deliveredQty || 0 : it.receivedQty || 0), 0);
+  const fulfillment = fulfillmentStatusFromQty(totalQty, doneQty);
+  const stage = combinedStageLabel({
+    approvalStatus: o.status,
+    fulfillment,
+    settlement: isSales ? o.receiptStatus : o.paymentStatus,
+    kind: isSales ? "sales" : "purchase"
+  });
+  const counterpart = isSales
+    ? `${o.customerName || "-"}（${o.customerCode || "-"} / #${o.customerId || "-"}）`
+    : `${o.supplierName || "-"}（${o.supplierCode || "-"} / #${o.supplierId || "-"}）`;
+  const openAmount = Number(isSales ? o.invoiceOpenAmount || 0 : o.billOpenAmount || 0);
+  const actionBar = (() => {
+    const oid = Number(o.id || 0);
+    const ono = String(o.orderNo || "");
+    if (!(oid > 0)) return "";
+    const execBtn = isSales
+      ? `<button class="secondary" type="button" onclick="jumpFromApprovalDetail('exec','sales',${oid},'${escapeHtml(ono)}')">去销售发货</button>`
+      : `<button class="secondary" type="button" onclick="jumpFromApprovalDetail('exec','purchase',${oid},'${escapeHtml(ono)}')">去采购收货</button>`;
+    const settleBtn = isSales
+      ? `<button class="secondary" type="button" onclick="jumpFromApprovalDetail('settle','sales',${oid},'${escapeHtml(ono)}')">去销售收款</button>`
+      : `<button class="secondary" type="button" onclick="jumpFromApprovalDetail('settle','purchase',${oid},'${escapeHtml(ono)}')">去采购付款</button>`;
+    return `<div class="approval-detail-actions">${execBtn}${settleBtn}</div>`;
+  })();
+  const itemRows = items
+    .map((it) => {
+      const done = Number(isSales ? it.deliveredQty || 0 : it.receivedQty || 0);
+      return `<tr>
+        <td>${escapeHtml(it.sku || "-")}</td>
+        <td>${escapeHtml(it.productName || "-")}</td>
+        <td class="amount">${fmtMoney(it.qty)}</td>
+        <td class="amount">${fmtMoney(done)}</td>
+        <td class="amount">${fmtMoney(it.price)}</td>
+        <td class="amount">${fmtMoney(it.amount)}</td>
+      </tr>`;
+    })
+    .join("");
+  return `<div class="approval-detail-panel">
+    <div class="approval-detail-head">
+      <div class="approval-detail-title">${escapeHtml(isSales ? "销售单" : "采购单")} ${escapeHtml(o.orderNo || "-")}（ID ${escapeHtml(o.id || "-")}）</div>
+      ${stageBadgeHtml(stage)}
+    </div>
+    ${actionBar}
+    <div class="approval-detail-kpi">
+      <div class="k"><div class="l">合计金额</div><div class="v">${fmtMoney(o.totalAmount)}</div></div>
+      <div class="k"><div class="l">${isSales ? "未收金额" : "未付金额"}</div><div class="v">${fmtMoney(openAmount)}</div></div>
+      <div class="k"><div class="l">${isSales ? "发货进度" : "收货进度"}</div><div class="v">${fmtMoney(doneQty)} / ${fmtMoney(totalQty)}</div></div>
+      <div class="k"><div class="l">状态</div><div class="v">${escapeHtml(zhOrderStatus(o.status))}</div></div>
+    </div>
+    <div class="approval-detail-meta">
+      <div class="m">${escapeHtml(isSales ? "客户" : "供应商")}：${escapeHtml(counterpart)}</div>
+      <div class="m">创建：${escapeHtml(o.createdAt || "-")}　提交：${escapeHtml(o.submittedAt || "-")}</div>
+      <div class="m">通过：${escapeHtml(o.approvedAt || "-")}　驳回：${escapeHtml(rejectMeta?.rejectedAt || o.rejectedAt || "-")}</div>
+      <div class="m">驳回意见：${escapeHtml(rejectMeta?.rejectComment || "-")}</div>
+    </div>
+    <div class="approval-items-wrap">
+      <table class="approval-items-table">
+        <thead><tr>
+          <th>SKU</th><th>商品</th><th>数量</th><th>${isSales ? "已发" : "已收"}</th><th>单价</th><th>小计</th>
+        </tr></thead>
+        <tbody>${itemRows || `<tr><td colspan="6" class="muted">暂无明细</td></tr>`}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+async function jumpFromApprovalDetail(kind, orderType, orderId, orderNo = "") {
+  try {
+    if (kind === "exec") {
+      setActivePanel("panelCreate");
+      // execution section is in create panel; prefill ids and refresh picks
+      if (orderType === "sales") {
+        const pick = document.getElementById("execSalesOrderPick");
+        const idInput = document.getElementById("execSalesOrderId");
+        if (idInput) idInput.value = String(orderId);
+        await refreshExecutionPicks();
+        if (pick) pick.value = String(orderId);
+        await applyExecutionOrderSelection("sales", orderId);
+        const qty = document.getElementById("execSalesQty");
+        if (qty) qty.focus();
+      } else {
+        const pick = document.getElementById("execPurchaseOrderPick");
+        const idInput = document.getElementById("execPurchaseOrderId");
+        if (idInput) idInput.value = String(orderId);
+        await refreshExecutionPicks();
+        if (pick) pick.value = String(orderId);
+        await applyExecutionOrderSelection("purchase", orderId);
+        const qty = document.getElementById("execPurchaseQty");
+        if (qty) qty.focus();
+      }
+      showActionOk(`已跳转执行区：${orderType === "sales" ? "销售发货" : "采购收货"}（订单ID ${orderId}${orderNo ? ` / ${orderNo}` : ""}）`);
+      return;
+    }
+
+    if (kind === "settle") {
+      setActivePanel("panelCreate");
+      await refreshSettlementPicks();
+      if (orderType === "sales") {
+        // auto match AR invoice by refType/refId
+        const hit = (settlementPickCache.ar || []).find((x) => x.refType === "sales_order" && Number(x.refId || 0) === Number(orderId));
+        const arPick = document.getElementById("rcArPick");
+        if (hit && arPick) {
+          arPick.value = String(hit.id);
+          arPick.dispatchEvent(new Event("change"));
+        } else {
+          showActionWarn("未找到该订单对应的应收单据，请先在“应收单据”下拉中手动选择。");
+          if (arPick) arPick.focus();
+        }
+        const amount = document.getElementById("rcAmount");
+        if (amount) amount.focus();
+      } else {
+        const hit = (settlementPickCache.ap || []).find(
+          (x) => x.refType === "purchase_order" && Number(x.refId || 0) === Number(orderId)
+        );
+        const apPick = document.getElementById("pyApPick");
+        if (hit && apPick) {
+          apPick.value = String(hit.id);
+          apPick.dispatchEvent(new Event("change"));
+        } else {
+          showActionWarn("未找到该订单对应的应付单据，请先在“应付单据”下拉中手动选择。");
+          if (apPick) apPick.focus();
+        }
+        const amount = document.getElementById("pyAmount");
+        if (amount) amount.focus();
+      }
+      showActionOk(`已跳转资金区：${orderType === "sales" ? "销售收款" : "采购付款"}（订单ID ${orderId}${orderNo ? ` / ${orderNo}` : ""}）`);
+    }
+  } catch (e) {
+    showActionWarn(e?.message || String(e));
+  }
+}
+
+// expose for inline onclick
+window.jumpFromApprovalDetail = jumpFromApprovalDetail;
 
 function formatProductDetail(row) {
   return [
@@ -564,9 +955,12 @@ function formatArInvoiceDetail(row) {
   const total = Number(row.totalAmount || 0);
   const received = Number(row.receivedAmount || 0);
   const open = Math.max(0, total - received);
+  const stageKey = arStageKeyFromRow(row);
+  const stageLabel = stageLabelFromKey(stageKey, "sales");
   return [
     `【应收发票】${fmtMaybe(row.invoiceNo)}（ID ${fmtMaybe(row.id)}）`,
     `客户：${fmtMaybe(row.customerName)}（#${fmtMaybe(row.customerId)}）`,
+    `阶段：${stageLabel}（依据：${zhArFulfillmentStatus(row.fulfillmentStatus)} + 已收 ${fmtMoney(received)} / ${fmtMoney(total)}）`,
     `状态：${zhArApStatus(row.status)}     未收余额：${fmtMoney(open)}`,
     `总金额：${fmtMoney(total)}     已收：${fmtMoney(received)}`,
     `来源：${fmtMaybe(row.refType)} #${fmtMaybe(row.refId)}`,
@@ -578,9 +972,12 @@ function formatApBillDetail(row) {
   const total = Number(row.totalAmount || 0);
   const paid = Number(row.paidAmount || 0);
   const open = Math.max(0, total - paid);
+  const stageKey = apStageKeyFromRow(row);
+  const stageLabel = stageLabelFromKey(stageKey, "purchase");
   return [
     `【应付账单】${fmtMaybe(row.billNo)}（ID ${fmtMaybe(row.id)}）`,
     `供应商：${fmtMaybe(row.supplierName)}（#${fmtMaybe(row.supplierId)}）`,
+    `阶段：${stageLabel}（依据：${zhApFulfillmentStatus(row.fulfillmentStatus)} + 已付 ${fmtMoney(paid)} / ${fmtMoney(total)}）`,
     `状态：${zhArApStatus(row.status)}     未付余额：${fmtMoney(open)}`,
     `总金额：${fmtMoney(total)}     已付：${fmtMoney(paid)}`,
     `来源：${fmtMaybe(row.refType)} #${fmtMaybe(row.refId)}`,
@@ -588,24 +985,58 @@ function formatApBillDetail(row) {
   ].join("\n");
 }
 
-function formatJournalDetail(entry) {
-  const lines = (entry.lines || []).map((l, i) => {
-    const dc = Number(l.debit || 0) > 0 ? `借 ${fmtMoney(l.debit)}` : `贷 ${fmtMoney(l.credit)}`;
-    return `  ${i + 1}. ${fmtMaybe(l.accountCode)}  ${dc}`;
-  });
+function renderJournalDetailHtml(entry) {
+  const lines = Array.isArray(entry?.lines) ? entry.lines : [];
   const debit = (entry.lines || []).reduce((s, l) => s + Number(l.debit || 0), 0);
   const credit = (entry.lines || []).reduce((s, l) => s + Number(l.credit || 0), 0);
-  return [
-    `【凭证】${fmtMaybe(entry.entryNo)}`,
-    `来源：${zhJournalRefType(entry.refType)}     参考：${fmtMaybe(entry.refType)} #${fmtMaybe(entry.refId)}`,
-    `摘要：${fmtMaybe(entry.memo)}`,
-    `合计：借 ${fmtMoney(debit)} / 贷 ${fmtMoney(credit)}`,
-    `时间：${fmtMaybe(entry.createdAt)}`,
-    "————————————————————————————",
-    "分录：",
-    ...lines,
-    `共 ${(entry.lines || []).length} 行`
-  ].join("\n");
+  const rowsHtml = lines
+    .map((l, i) => {
+      const debitVal = Number(l.debit || 0);
+      const creditVal = Number(l.credit || 0);
+      return `<tr>
+        <td>${i + 1}</td>
+        <td>${escapeHtml(l.accountCode || "-")}</td>
+        <td>${escapeHtml(l.accountName || "-")}</td>
+        <td class="td-amount">${fmtMoney(debitVal)}</td>
+        <td class="td-amount">${fmtMoney(creditVal)}</td>
+        <td>${escapeHtml(l.memo || "-")}</td>
+      </tr>`;
+    })
+    .join("");
+
+  return `<div class="journal-detail-view">
+    <div class="journal-detail-kpi">
+      <div class="k"><div class="l">凭证号</div><div class="v">${escapeHtml(fmtMaybe(entry.entryNo))}</div></div>
+      <div class="k"><div class="l">来源</div><div class="v">${escapeHtml(zhJournalRefType(entry.refType))}</div></div>
+      <div class="k"><div class="l">借方合计</div><div class="v">${fmtMoney(debit)}</div></div>
+      <div class="k"><div class="l">贷方合计</div><div class="v">${fmtMoney(credit)}</div></div>
+    </div>
+    <div class="journal-detail-meta">
+      <div>参考：${escapeHtml(fmtMaybe(entry.refType))} #${escapeHtml(fmtMaybe(entry.refId))}</div>
+      <div>摘要：${escapeHtml(fmtMaybe(entry.memo))}</div>
+      <div>时间：${escapeHtml(fmtMaybe(entry.createdAt))}</div>
+      <div>分录：共 ${lines.length} 行</div>
+    </div>
+    <div class="journal-lines-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>序号</th>
+            <th>科目编码</th>
+            <th>科目名称</th>
+            <th class="th-amount">借方</th>
+            <th class="th-amount">贷方</th>
+            <th>备注</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml || "<tr><td colspan='6' class='muted'>无分录明细</td></tr>"}</tbody>
+      </table>
+    </div>
+    <details class="journal-raw">
+      <summary>查看原始数据</summary>
+      <pre>${escapeHtml(JSON.stringify(entry, null, 2))}</pre>
+    </details>
+  </div>`;
 }
 function zhArApStatus(s) {
   return pickZh(AR_AP_STATUS_ZH, s);
@@ -629,9 +1060,184 @@ function zhEventType(s) {
   return pickZh(EVENT_TYPE_ZH, s);
 }
 
+function zhArFulfillmentStatus(s) {
+  const map = {
+    not_shipped: "未发货",
+    partially_shipped: "部分发货",
+    fully_shipped: "已发货",
+    unknown: "未知"
+  };
+  return map[s] || String(s || "未知");
+}
+
+function zhApFulfillmentStatus(s) {
+  const map = {
+    not_received: "未收货",
+    partially_received: "部分收货",
+    fully_received: "已收货",
+    unknown: "未知"
+  };
+  return map[s] || String(s || "未知");
+}
+
+function zhPaymentStatus(s) {
+  const map = {
+    no_bill: "未生成应付",
+    unpaid: "未付款",
+    partial_paid: "部分付款",
+    paid: "已付款"
+  };
+  return map[s] || String(s || "未知");
+}
+
+function zhReceiptStatus(s) {
+  const map = {
+    no_invoice: "未生成应收",
+    unreceived: "未收款",
+    partial_received: "部分收款",
+    received: "已收款"
+  };
+  return map[s] || String(s || "未知");
+}
+
+function fulfillmentStatusFromQty(totalQty, doneQty) {
+  const total = Number(totalQty || 0);
+  const done = Number(doneQty || 0);
+  if (total <= 0 || done <= 0) return "none";
+  if (done + 0.0001 >= total) return "full";
+  return "partial";
+}
+
+function combinedStageLabel(args) {
+  const { approvalStatus, fulfillment, settlement, kind } = args;
+  const st = String(approvalStatus || "").toLowerCase();
+  if (st && st !== "approved") return zhOrderStatus(st);
+
+  const f = String(fulfillment || "none");
+  const s = String(settlement || "unpaid");
+
+  if (f === "none" && (s === "unpaid" || s === "unreceived")) return "待执行";
+  if (f === "partial") return "执行中";
+  if (f === "full" && (s === "unpaid" || s === "unreceived")) return "已执行待结算";
+  if (f === "full" && (s === "partial_paid" || s === "partial_received")) return "结算中";
+  if (f === "full" && (s === "paid" || s === "received")) return "已完成";
+  return kind === "sales" ? "异常（未发已收）" : "异常（未收已付）";
+}
+
+function stageBadgeHtml(label) {
+  const text = String(label || "");
+  const title = text.includes("（") && text.includes("）") ? text : text;
+  let cls = "badge badge-muted";
+  if (text === "待执行") cls = "badge badge-muted";
+  else if (text === "执行中") cls = "badge badge-info";
+  else if (text === "已执行待结算") cls = "badge badge-warn";
+  else if (text === "结算中") cls = "badge badge-warn";
+  else if (text === "已完成") cls = "badge badge-ok";
+  else if (text.startsWith("异常")) cls = "badge badge-danger";
+  // Keep tooltip as full label; allow visible shorten later if needed.
+  return `<span class="${cls}" title="${escapeHtml(title)}">${escapeHtml(text)}</span>`;
+}
+
+function arStageKeyFromRow(r) {
+  const f = String(r.fulfillmentStatus || "unknown");
+  const total = Number(r.totalAmount || 0);
+  const settled = Number(r.receivedAmount || 0);
+  const isUnsettled = settled <= 0.0001;
+  const isSettled = total > 0 && settled + 0.0001 >= total;
+  const isPartiallySettled = settled > 0.0001 && settled + 0.0001 < total;
+  if (f === "not_shipped" && isUnsettled) return "todo";
+  if (f === "partially_shipped") return "doing";
+  if (f === "fully_shipped" && isUnsettled) return "wait_settle";
+  if (f === "fully_shipped" && isPartiallySettled) return "settling";
+  if (f === "fully_shipped" && isSettled) return "done";
+  if ((f === "not_shipped" || f === "partially_shipped") && (isSettled || isPartiallySettled)) return "abnormal";
+  return "other";
+}
+
+function apStageKeyFromRow(r) {
+  const f = String(r.fulfillmentStatus || "unknown");
+  const total = Number(r.totalAmount || 0);
+  const settled = Number(r.paidAmount || 0);
+  const isUnsettled = settled <= 0.0001;
+  const isSettled = total > 0 && settled + 0.0001 >= total;
+  const isPartiallySettled = settled > 0.0001 && settled + 0.0001 < total;
+  if (f === "not_received" && isUnsettled) return "todo";
+  if (f === "partially_received") return "doing";
+  if (f === "fully_received" && isUnsettled) return "wait_settle";
+  if (f === "fully_received" && isPartiallySettled) return "settling";
+  if (f === "fully_received" && isSettled) return "done";
+  if ((f === "not_received" || f === "partially_received") && (isSettled || isPartiallySettled)) return "abnormal";
+  return "other";
+}
+
+function stageLabelFromKey(key, kind) {
+  if (key === "todo") return "待执行";
+  if (key === "doing") return "执行中";
+  if (key === "wait_settle") return "已执行待结算";
+  if (key === "settling") return "结算中";
+  if (key === "done") return "已完成";
+  if (key === "abnormal") return kind === "sales" ? "异常（未发已收）" : "异常（未收已付）";
+  return "未知";
+}
+
 function showActionWarn(message) {
   if (!notificationBar) return;
   notificationBar.textContent = `提示：${message}`;
+}
+
+function showActionOk(message) {
+  if (!notificationBar) return;
+  notificationBar.textContent = `成功：${message}`;
+}
+
+let actionToastTimer = null;
+function showActionToast(type, message) {
+  if (!actionToast) return;
+  actionToast.textContent = message;
+  actionToast.classList.remove("success", "error");
+  actionToast.classList.add(type === "success" ? "success" : "error", "show");
+  if (actionToastTimer) clearTimeout(actionToastTimer);
+  actionToastTimer = setTimeout(() => {
+    actionToast.classList.remove("show");
+  }, 3600);
+}
+
+function showInlineFeedback(targetId, type, message) {
+  const el = document.getElementById(targetId);
+  if (!el) return;
+  el.textContent = message;
+  el.classList.remove("success", "error", "info");
+  const cls = type === "success" ? "success" : type === "error" ? "error" : "info";
+  el.classList.add(cls, "show");
+}
+
+function clearInlineFeedback() {
+  [
+    "poActionFeedback",
+    "soActionFeedback",
+    "rcActionFeedback",
+    "pyActionFeedback",
+    "execPurchaseFeedback",
+    "execSalesFeedback",
+    "whLocActionFeedback"
+  ].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove("show", "success", "error");
+    el.textContent = "";
+  });
+}
+
+function autoSelectIfSingle(selectId) {
+  const el = document.getElementById(selectId);
+  if (!el) return false;
+  const opts = Array.from(el.options || []);
+  const candidates = opts.filter((o) => String(o.value || "").trim() !== "");
+  if (candidates.length === 1) {
+    el.value = String(candidates[0].value);
+    return true;
+  }
+  return false;
 }
 
 function toggleQuickPartyBox(boxId, show, nameInputId = "") {
@@ -793,32 +1399,93 @@ function updateKpis() {
 
 function renderTrendFromCache() {
   const rows = cache.trend || [];
+  const viewMode = String(trendViewMode?.value || "all");
+  const days = Math.max(1, Number(trendDays?.value || 14));
+  if (trendHint) {
+    const viewText = viewMode === "trade" ? "销售/采购" : viewMode === "cash" ? "收款/付款" : "销售/采购/收款/付款";
+    trendHint.textContent = `最近${days}天交易趋势（${viewText}）。`;
+  }
   if (!rows.length) {
     trendChart.innerHTML = "<div class='muted'>暂无趋势数据</div>";
     return;
   }
   const maxVal = rows.reduce(
-    (m, r) => Math.max(m, Number(r.salesAmount || 0), Number(r.purchaseAmount || 0), Number(r.receiptAmount || 0), Number(r.paymentAmount || 0)),
+    (m, r) =>
+      Math.max(
+        m,
+        viewMode === "cash" ? 0 : Number(r.salesAmount || 0),
+        viewMode === "cash" ? 0 : Number(r.purchaseAmount || 0),
+        viewMode === "trade" ? 0 : Number(r.receiptAmount || 0),
+        viewMode === "trade" ? 0 : Number(r.paymentAmount || 0)
+      ),
     1
   );
-  trendChart.innerHTML = rows
-    .map((r) => {
+  const showTrade = viewMode !== "cash";
+  const showCash = viewMode !== "trade";
+  const legendItems = [];
+  if (showTrade) {
+    legendItems.push(`<span class="item"><span class="dot sales"></span>销售</span>`);
+    legendItems.push(`<span class="item"><span class="dot purchase"></span>采购</span>`);
+  }
+  if (showCash) {
+    legendItems.push(`<span class="item"><span class="dot receipt"></span>收款</span>`);
+    legendItems.push(`<span class="item"><span class="dot payment"></span>付款</span>`);
+  }
+  const legendHtml = `<div class="trend-legend">${legendItems.join("")}</div>`;
+  const rowsHtml = rows
+    .map((r, idx) => {
       const salesPct = Math.min(100, Math.round((Number(r.salesAmount || 0) / maxVal) * 100));
       const purchasePct = Math.min(100, Math.round((Number(r.purchaseAmount || 0) / maxVal) * 100));
-      const width = Math.max(salesPct, purchasePct, 2);
-      return `<div class="trend-row">
+      const receiptPct = Math.min(100, Math.round((Number(r.receiptAmount || 0) / maxVal) * 100));
+      const paymentPct = Math.min(100, Math.round((Number(r.paymentAmount || 0) / maxVal) * 100));
+      const sales = Number(r.salesAmount || 0);
+      const purchase = Number(r.purchaseAmount || 0);
+      const receipt = Number(r.receiptAmount || 0);
+      const payment = Number(r.paymentAmount || 0);
+      const net = receipt - payment;
+      const netClass = net >= 0 ? "ok" : "warn";
+      const prev = idx > 0 ? rows[idx - 1] : null;
+      const prevNet = prev ? Number(prev.receiptAmount || 0) - Number(prev.paymentAmount || 0) : null;
+      const delta = prevNet == null ? null : net - prevNet;
+      const deltaArrow = delta == null ? "—" : delta > 0 ? "↑" : delta < 0 ? "↓" : "→";
+      const deltaClass = delta == null ? "muted" : delta > 0 ? "ok" : delta < 0 ? "warn" : "muted";
+      const abnormal = Math.abs(net) >= maxVal * 0.75 || (delta != null && Math.abs(delta) >= maxVal * 0.5);
+      const bars = [];
+      if (showTrade) {
+        bars.push(`<div class="trend-bar" title="销售 ${sales.toFixed(2)}"><div class="trend-fill sales" style="width:${Math.max(2, salesPct)}%"></div></div>`);
+        bars.push(`<div class="trend-bar" title="采购 ${purchase.toFixed(2)}"><div class="trend-fill purchase" style="width:${Math.max(2, purchasePct)}%"></div></div>`);
+      }
+      if (showCash) {
+        bars.push(`<div class="trend-bar" title="收款 ${receipt.toFixed(2)}"><div class="trend-fill receipt" style="width:${Math.max(2, receiptPct)}%"></div></div>`);
+        bars.push(`<div class="trend-bar" title="付款 ${payment.toFixed(2)}"><div class="trend-fill payment" style="width:${Math.max(2, paymentPct)}%"></div></div>`);
+      }
+      const valueRows = [];
+      if (showTrade) valueRows.push(`<div>销 ${sales.toFixed(0)} / 采 ${purchase.toFixed(0)}</div>`);
+      if (showCash) valueRows.push(`<div>收 ${receipt.toFixed(0)} / 付 ${payment.toFixed(0)}</div>`);
+      return `<div class="trend-row ${abnormal ? "abnormal" : ""}">
         <div class="muted">${r.day}</div>
-        <div class="trend-bar"><div class="trend-fill" style="width:${width}%"></div></div>
-        <div class="muted">销:${Number(r.salesAmount || 0).toFixed(0)}</div>
+        <div class="trend-bars">${bars.join("")}</div>
+        <div class="trend-values">
+          ${valueRows.join("")}
+          <div class="net ${netClass}">净流入 ${net >= 0 ? "+" : ""}${net.toFixed(0)}</div>
+          <div class="delta ${deltaClass}">较前日 ${deltaArrow} ${delta == null ? "-" : `${delta >= 0 ? "+" : ""}${delta.toFixed(0)}`}</div>
+        </div>
       </div>`;
     })
     .join("");
+  trendChart.innerHTML = `${legendHtml}${rowsHtml}`;
 }
 
 async function queryTrend() {
   ensureToken();
-  const rows = await api("/api/finance/reports/trend?days=14");
+  const days = Math.max(1, Number(trendDays?.value || 14));
+  const rows = await api(`/api/finance/reports/trend?days=${days}`);
   cache.trend = rows;
+  if (trendHint) {
+    const viewMode = String(trendViewMode?.value || "all");
+    const viewText = viewMode === "trade" ? "销售/采购" : viewMode === "cash" ? "收款/付款" : "销售/采购/收款/付款";
+    trendHint.textContent = `最近${days}天交易趋势（${viewText}，实际返回 ${rows.length} 天）。`;
+  }
   renderTrendFromCache();
   log("趋势图表", rows);
 }
@@ -926,12 +1593,105 @@ function setApprovalStatusFilter(value) {
   el.value = value;
 }
 
+function resetApprovalListFilters() {
+  setApprovalStatusFilter("all");
+  const stageEl = document.getElementById("approvalStageFilter");
+  if (stageEl) stageEl.value = "all";
+  const searchEl = document.getElementById("approvalSearch");
+  if (searchEl) searchEl.value = "";
+  const box = document.getElementById("chkApprovalActionableOnly");
+  if (box) box.checked = false;
+}
+
+function approvalStageFilterValue() {
+  const el = document.getElementById("approvalStageFilter");
+  return (el?.value || "all").trim();
+}
+
+function approvalSearchValue() {
+  const el = document.getElementById("approvalSearch");
+  return String(el?.value || "").trim().toLowerCase();
+}
+
+function approvalSortValue() {
+  const el = document.getElementById("approvalSort");
+  return (el?.value || "id_desc").trim();
+}
+
+function approvalStageKeyFromRow(r) {
+  const kind = approvalRowsKind === "pending" ? String(r.orderType || approvalType || "purchase") : approvalRowsKind;
+  if (kind === "sales") {
+    const f = fulfillmentStatusFromQty(r.totalQty, r.deliveredQty);
+    const label = combinedStageLabel({ approvalStatus: r.status, fulfillment: f, settlement: r.receiptStatus, kind: "sales" });
+    if (label === "待执行") return "todo";
+    if (label === "执行中") return "doing";
+    if (label === "已执行待结算") return "wait_settle";
+    if (label === "结算中") return "settling";
+    if (label === "已完成") return "done";
+    if (String(label).startsWith("异常")) return "abnormal";
+    return "other";
+  }
+  const f = fulfillmentStatusFromQty(r.totalQty, r.receivedQty);
+  const label = combinedStageLabel({ approvalStatus: r.status, fulfillment: f, settlement: r.paymentStatus, kind: "purchase" });
+  if (label === "待执行") return "todo";
+  if (label === "执行中") return "doing";
+  if (label === "已执行待结算") return "wait_settle";
+  if (label === "结算中") return "settling";
+  if (label === "已完成") return "done";
+  if (String(label).startsWith("异常")) return "abnormal";
+  return "other";
+}
+
+function approvalCheckCell(row) {
+  const id = Number(row?.id || 0);
+  const checked = id > 0 && approvalCheckedIds.has(id) ? "checked" : "";
+  return `<input type="checkbox" class="approval-row-check" data-id="${id}" ${checked} onclick="event.stopPropagation();" />`;
+}
+
+function bindApprovalChecks(target) {
+  if (!target) return;
+  target.querySelectorAll(".approval-row-check").forEach((el) => {
+    if (el.dataset.bound === "1") return;
+    el.dataset.bound = "1";
+    el.addEventListener("change", (e) => {
+      const id = Number(e.target?.getAttribute("data-id") || 0);
+      if (!(id > 0)) return;
+      if (e.target.checked) approvalCheckedIds.add(id);
+      else approvalCheckedIds.delete(id);
+      const input = document.getElementById("approvalBatchIds");
+      if (input) input.value = Array.from(approvalCheckedIds).join(",");
+    });
+  });
+}
+
+function supplierDisplayById(id) {
+  const n = Number(id || 0);
+  if (!(n > 0)) return "-";
+  const hit = (masterPickCache.suppliers || []).find((s) => Number(s.id || 0) === n);
+  if (!hit) return `#${n}`;
+  const name = String(hit.name || "").trim();
+  const code = String(hit.code || "").trim();
+  if (name && code) return `${name}（${code}） (#${n})`;
+  return `${name || code || `#${n}`} (#${n})`;
+}
+
 function getFilteredApprovalRows(rows) {
   const status = approvalStatusFilterValue();
+  const stage = approvalStageFilterValue();
+  const q = approvalSearchValue();
+  const sortMode = approvalSortValue();
   const actionableOnly = Boolean(document.getElementById("chkApprovalActionableOnly")?.checked);
-  return rows.filter((r) => {
+  const filtered = rows.filter((r) => {
     const rowStatus = String(r.status || "").toLowerCase();
     if (status && status !== "all" && rowStatus !== status) return false;
+    if (stage && stage !== "all") {
+      const k = approvalStageKeyFromRow(r);
+      if (k !== stage) return false;
+    }
+    if (q) {
+      const hay = `${r.id || ""} ${r.orderNo || ""} ${r.customerId || ""} ${r.supplierId || ""}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
     if (!actionableOnly) return true;
     const kind = approvalRowsKind === "pending" ? String(r.orderType || approvalType || "purchase") : approvalRowsKind;
     const canSubmit = kind === "sales" ? hasPermission("sales:submit") : hasPermission("purchase:submit");
@@ -940,6 +1700,21 @@ function getFilteredApprovalRows(rows) {
     if (rowStatus === "submitted") return canApprove;
     return false;
   });
+
+  if (sortMode === "stage_abnormal_first") {
+    const weight = (r) => {
+      const k = approvalStageKeyFromRow(r);
+      if (k === "abnormal") return 0;
+      if (k === "todo") return 1;
+      if (k === "doing") return 2;
+      if (k === "wait_settle") return 3;
+      if (k === "settling") return 4;
+      if (k === "done") return 5;
+      return 9;
+    };
+    return [...filtered].sort((a, b) => weight(a) - weight(b) || Number(b.id || 0) - Number(a.id || 0));
+  }
+  return filtered;
 }
 
 function renderApprovalTableFromCache() {
@@ -949,9 +1724,36 @@ function renderApprovalTableFromCache() {
       tableTargets.approval,
       rows,
       [
+        { label: "选", getter: (r) => approvalCheckCell(r) },
         { label: "类型", getter: (r) => zhOrderType(r.orderType) },
         { label: "ID", getter: (r) => r.id },
-        { label: "单号", getter: (r) => r.orderNo },
+        { label: "单号", getter: (r) => `<span title="${escapeHtml(r.orderNo || "-")}">${escapeHtml(r.orderNo || "-")}</span>` },
+        {
+          label: "阶段",
+          getter: (r) => {
+            const kind = String(r.orderType || approvalType || "purchase");
+            if (kind === "sales") {
+              const fulfillment = fulfillmentStatusFromQty(r.totalQty, r.deliveredQty);
+              return stageBadgeHtml(
+                combinedStageLabel({
+                approvalStatus: r.status,
+                fulfillment,
+                settlement: r.receiptStatus,
+                kind: "sales"
+                })
+              );
+            }
+            const fulfillment = fulfillmentStatusFromQty(r.totalQty, r.receivedQty);
+            return stageBadgeHtml(
+              combinedStageLabel({
+              approvalStatus: r.status,
+              fulfillment,
+              settlement: r.paymentStatus,
+              kind: "purchase"
+              })
+            );
+          }
+        },
         { label: "状态", getter: (r) => formatApprovalStatusCell(r) },
         { label: "金额", getter: (r) => r.totalAmount },
         { label: "提交时间", getter: (r) => r.submittedAt || "-" },
@@ -959,9 +1761,11 @@ function renderApprovalTableFromCache() {
       ],
       {
         clickable: true,
-        onRowClick: (row) => selectApprovalRow(row.orderType || approvalType, row)
+        onRowClick: (row) => selectApprovalRow(row.orderType || approvalType, row),
+        stickyFirstCol: false
       }
     );
+    bindApprovalChecks(tableTargets.approval);
     bindRejectSummaryCopy(tableTargets.approval);
     return;
   }
@@ -970,9 +1774,24 @@ function renderApprovalTableFromCache() {
       tableTargets.approval,
       rows,
       [
+        { label: "选", getter: (r) => approvalCheckCell(r) },
         { label: "ID", getter: (r) => r.id },
-        { label: "单号", getter: (r) => r.orderNo },
-        { label: "客户ID", getter: (r) => r.customerId },
+        { label: "单号", getter: (r) => `<span title="${escapeHtml(r.orderNo || "-")}">${escapeHtml(r.orderNo || "-")}</span>` },
+        { label: "客户", getter: (r) => r.customerId },
+        {
+          label: "阶段",
+          getter: (r) => {
+            const fulfillment = fulfillmentStatusFromQty(r.totalQty, r.deliveredQty);
+            return stageBadgeHtml(
+              combinedStageLabel({
+                approvalStatus: r.status,
+                fulfillment,
+                settlement: r.receiptStatus,
+                kind: "sales"
+              })
+            );
+          }
+        },
         { label: "状态", getter: (r) => formatApprovalStatusCell(r) },
         { label: "金额", getter: (r) => r.totalAmount },
         { label: "创建时间", getter: (r) => r.createdAt },
@@ -980,9 +1799,11 @@ function renderApprovalTableFromCache() {
       ],
       {
         clickable: true,
-        onRowClick: (row) => selectApprovalRow("sales", row)
+        onRowClick: (row) => selectApprovalRow("sales", row),
+        stickyFirstCol: false
       }
     );
+    bindApprovalChecks(tableTargets.approval);
     bindRejectSummaryCopy(tableTargets.approval);
     return;
   }
@@ -990,9 +1811,24 @@ function renderApprovalTableFromCache() {
     tableTargets.approval,
     rows,
     [
+      { label: "选", getter: (r) => approvalCheckCell(r) },
       { label: "ID", getter: (r) => r.id },
-      { label: "单号", getter: (r) => r.orderNo },
-      { label: "供应商ID", getter: (r) => r.supplierId },
+      { label: "单号", getter: (r) => `<span title="${escapeHtml(r.orderNo || "-")}">${escapeHtml(r.orderNo || "-")}</span>` },
+        { label: "供应商", getter: (r) => supplierDisplayById(r.supplierId) },
+      {
+        label: "阶段",
+        getter: (r) => {
+          const fulfillment = fulfillmentStatusFromQty(r.totalQty, r.receivedQty);
+          return stageBadgeHtml(
+            combinedStageLabel({
+              approvalStatus: r.status,
+              fulfillment,
+              settlement: r.paymentStatus,
+              kind: "purchase"
+            })
+          );
+        }
+      },
       { label: "状态", getter: (r) => formatApprovalStatusCell(r) },
       { label: "金额", getter: (r) => r.totalAmount },
       { label: "创建时间", getter: (r) => r.createdAt },
@@ -1000,9 +1836,11 @@ function renderApprovalTableFromCache() {
     ],
     {
       clickable: true,
-      onRowClick: (row) => selectApprovalRow("purchase", row)
+      onRowClick: (row) => selectApprovalRow("purchase", row),
+      stickyFirstCol: false
     }
   );
+  bindApprovalChecks(tableTargets.approval);
   bindRejectSummaryCopy(tableTargets.approval);
 }
 
@@ -1034,6 +1872,119 @@ function setApprovalQuickFilterDefault() {
   box.checked = currentApprovalView === "pending";
 }
 
+function normalizePagedRows(payload) {
+  if (Array.isArray(payload)) return { rows: payload, total: payload.length, page: 1, pageSize: payload.length || approvalPager.pageSize };
+  const rows = Array.isArray(payload?.rows) ? payload.rows : [];
+  const total = Number(payload?.total || rows.length);
+  const page = Number(payload?.page || 1);
+  const pageSize = Number(payload?.pageSize || approvalPager.pageSize);
+  return { rows, total, page, pageSize };
+}
+
+function syncSimplePager(kind, label) {
+  const meta = serverPager[kind];
+  const info = document.getElementById(
+    kind === "ar"
+      ? "pagerAr"
+      : kind === "ap"
+      ? "pagerAp"
+      : kind === "remindReceipts"
+      ? "remindReceiptsPagerInfo"
+      : "remindDeliveriesPagerInfo"
+  );
+  if (!meta) return;
+  const totalPages = Math.max(1, Math.ceil((meta.total || 0) / Math.max(1, meta.pageSize)));
+  if (kind === "ar" || kind === "ap") {
+    const root = kind === "ar" ? pagers.ar : pagers.ap;
+    if (!root) return;
+    root.innerHTML = "";
+    const prev = document.createElement("button");
+    prev.textContent = "上一页";
+    prev.disabled = meta.page <= 1;
+    prev.onclick = async () => {
+      meta.page = Math.max(1, meta.page - 1);
+      if (kind === "ar") await queryAr();
+      else await queryAp();
+    };
+    const next = document.createElement("button");
+    next.textContent = "下一页";
+    next.disabled = meta.page >= totalPages;
+    next.onclick = async () => {
+      meta.page += 1;
+      if (kind === "ar") await queryAr();
+      else await queryAp();
+    };
+    const span = document.createElement("span");
+    span.className = "muted";
+    span.textContent = `${label} 第 ${meta.page}/${totalPages} 页（共 ${meta.total} 条）`;
+    const size = document.createElement("select");
+    [10, 20, 50, 100].forEach((v) => {
+      const opt = document.createElement("option");
+      opt.value = String(v);
+      opt.textContent = `${v}/页`;
+      if (meta.pageSize === v) opt.selected = true;
+      size.appendChild(opt);
+    });
+    size.onchange = async () => {
+      meta.pageSize = Number(size.value || 10);
+      meta.page = 1;
+      savePagerPrefs();
+      if (kind === "ar") await queryAr();
+      else await queryAp();
+    };
+    const jump = document.createElement("input");
+    jump.type = "number";
+    jump.min = "1";
+    jump.placeholder = "页码";
+    jump.style.maxWidth = "78px";
+    const jumpBtn = document.createElement("button");
+    jumpBtn.textContent = "跳转";
+    jumpBtn.className = "secondary";
+    jumpBtn.onclick = async () => {
+      const v = Number(jump.value || 0);
+      if (!(v > 0)) return;
+      meta.page = v;
+      if (kind === "ar") await queryAr();
+      else await queryAp();
+    };
+    root.appendChild(prev);
+    root.appendChild(next);
+    root.appendChild(size);
+    root.appendChild(jump);
+    root.appendChild(jumpBtn);
+    root.appendChild(span);
+    return;
+  }
+  if (info) info.textContent = `分页：第 ${meta.page}/${totalPages} 页，共 ${meta.total} 条`;
+  const prevBtn = document.getElementById(kind === "remindReceipts" ? "btnRemindReceiptsPrev" : "btnRemindDeliveriesPrev");
+  const nextBtn = document.getElementById(kind === "remindReceipts" ? "btnRemindReceiptsNext" : "btnRemindDeliveriesNext");
+  if (prevBtn) prevBtn.disabled = meta.page <= 1;
+  if (nextBtn) nextBtn.disabled = meta.page >= totalPages;
+}
+
+function syncApprovalPagerInfo() {
+  const info = document.getElementById("approvalPagerInfo");
+  const prev = document.getElementById("btnApprovalPrev");
+  const next = document.getElementById("btnApprovalNext");
+  if (!info) return;
+  const totalPages = Math.max(1, Math.ceil((approvalPager.total || 0) / Math.max(1, approvalPager.pageSize)));
+  info.textContent = `分页：第 ${approvalPager.page}/${totalPages} 页，共 ${approvalPager.total} 条`;
+  if (prev) prev.disabled = approvalPager.page <= 1;
+  if (next) next.disabled = approvalPager.page >= totalPages;
+}
+
+function initServerPagerUiDefaults() {
+  const map = [
+    ["approvalPageSize", approvalPager.pageSize || 10],
+    ["remindReceiptsPageSize", serverPager.remindReceipts.pageSize],
+    ["remindDeliveriesPageSize", serverPager.remindDeliveries.pageSize]
+  ];
+  map.forEach(([id, v]) => {
+    const el = document.getElementById(id);
+    if (el) el.value = String(v);
+  });
+}
+
 function applyRoleUi() {
   const guards = [
     ["btnSeed", "stock:write"],
@@ -1048,6 +1999,7 @@ function applyRoleUi() {
     ["btnLoadPoApprovals", "purchase:read"],
     ["btnLoadSoApprovals", "sales:read"],
     ["btnLoadPendingApprovals", ["purchase:approve", "sales:approve"]],
+    ["btnLoadAbnormalApprovals", ["purchase:read", "sales:read", "purchase:approve", "sales:approve"]],
     ["btnResetApprovalView", ["purchase:read", "sales:read", "purchase:approve", "sales:approve"]],
     ["chkApprovalActionableOnly", ["purchase:read", "sales:read", "purchase:approve", "sales:approve"]],
     ["btnLoadApprovalSla", ["purchase:approve", "sales:approve"]],
@@ -1056,7 +2008,12 @@ function applyRoleUi() {
     ["btnTrend", "stock:read"],
     ["btnSubmitApproval", ["purchase:submit", "sales:submit"]],
     ["btnApproveApproval", ["purchase:approve", "sales:approve"]],
+    ["btnSelectAllApprovalRows", ["purchase:approve", "sales:approve"]],
+    ["btnFillBatchIds", ["purchase:approve", "sales:approve"]],
+    ["btnBatchApprove", ["purchase:approve", "sales:approve"]],
     ["btnRejectApproval", ["purchase:approve", "sales:approve"]],
+    ["btnBatchReject", ["purchase:approve", "sales:approve"]],
+    ["btnJumpAbnormal", ["purchase:read", "sales:read", "purchase:approve", "sales:approve"]],
     ["btnVoidApproval", ["purchase:approve", "sales:approve"]],
     ["btnReverseApproval", ["purchase:approve", "sales:approve"]],
     ["btnProductAdd", ["stock:write", "product:write"]],
@@ -1066,6 +2023,10 @@ function applyRoleUi() {
     ["btnAudit", "*"],
     ["btnAlerts", "*"],
     ["btnRunAll", "*"],
+    ["btnDataChecks", "*"],
+    ["btnRemindReceipts", "purchase:read"],
+    ["btnRemindDeliveries", "sales:read"],
+    ["btnSaveReminderPref", ["purchase:read", "sales:read"]],
     ["navApproval", ["purchase:read", "sales:read", "purchase:approve", "sales:approve"]],
     ["navAr", "sales:read"],
     ["navAp", "purchase:read"],
@@ -1081,6 +2042,12 @@ function applyRoleUi() {
     ["btnConfirmSales", "sales:write"],
     ["btnConfirmReceipt", "sales:write"],
     ["btnConfirmPayment", "purchase:write"],
+    ["btnCreateReceiptFlow", "purchase:write"],
+    ["btnCreateDeliveryFlow", "sales:write"],
+    ["btnCreatePurchaseReturnFlow", "purchase:write"],
+    ["btnCreateSalesReturnFlow", "sales:write"],
+    ["btnWarehouseCreate", "stock:write"],
+    ["btnLocationCreate", "stock:write"],
     ["btnBizPending", ["purchase:approve", "sales:approve"]],
     ["btnBizSubmit", ["purchase:submit", "sales:submit"]],
     ["btnBizApprove", ["purchase:approve", "sales:approve"]],
@@ -1170,6 +2137,19 @@ function applyRoleUi() {
   renderRoleTodoFocus();
 }
 
+async function runDataChecks() {
+  ensureToken();
+  if (!hasPermission("*")) throw new Error("仅管理员可执行一致性检查。");
+  const res = await api("/api/ops/data-checks");
+  const po = res.purchasePaidButNotReceived || [];
+  const so = res.salesReceivedButNotShipped || [];
+  log("一致性检查", {
+    purchasePaidButNotReceived: { count: po.length, sample: po.slice(0, 10) },
+    salesReceivedButNotShipped: { count: so.length, sample: so.slice(0, 10) }
+  });
+  showActionOk(`一致性检查完成：采购异常${po.length}条，销售异常${so.length}条（详情见日志）`);
+}
+
 function paginate(key, rows) {
   const state = pagerState[key];
   const totalPages = Math.max(1, Math.ceil(rows.length / state.pageSize));
@@ -1223,6 +2203,21 @@ function ensureToken() {
   if (!state.token) throw new Error("请先登录。");
 }
 
+function handleAuthExpired(message = "登录已过期，请重新登录。") {
+  state.token = "";
+  state.username = "";
+  state.role = "";
+  state.permissions = [];
+  state.canUseDevOps = false;
+  localStorage.removeItem(STORAGE_SESSION_KEY);
+  setAuthenticatedUi(false);
+  if (loginStatus) {
+    loginStatus.textContent = message;
+    loginStatus.className = "warn";
+  }
+  showActionWarn(message);
+}
+
 function api(path, options = {}) {
   const headers = options.headers || {};
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
@@ -1230,8 +2225,16 @@ function api(path, options = {}) {
     const text = await res.text();
     const body = text ? JSON.parse(text) : {};
     if (!res.ok) {
+      const rawMessage = String(body.message || `HTTP ${res.status}`);
+      const authExpired =
+        res.status === 401 ||
+        /token expired|jwt expired|unauthorized|invalid token|forbidden/i.test(rawMessage);
+      if (authExpired) {
+        handleAuthExpired("登录已过期，请重新登录。");
+        throw new Error("登录已过期，请重新登录。");
+      }
       const details = body.issues ? ` | ${body.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}` : "";
-      throw new Error((body.message || `HTTP ${res.status}`) + details);
+      throw new Error(rawMessage + details);
     }
     return body;
   });
@@ -1331,27 +2334,341 @@ async function refreshPartyPicks() {
     const soProductPick = document.getElementById("soProductPick");
     if (poProductPick) poProductPick.innerHTML = productOptions.join("");
     if (soProductPick) soProductPick.innerHTML = productOptions.join("");
+    const execPurchaseProductPick = document.getElementById("execPurchaseProductPick");
+    const execSalesProductPick = document.getElementById("execSalesProductPick");
+    if (execPurchaseProductPick) execPurchaseProductPick.innerHTML = productOptions.join("");
+    if (execSalesProductPick) execSalesProductPick.innerHTML = productOptions.join("");
     updateSelectVisualState("poProductPick");
     updateSelectVisualState("soProductPick");
     renderPurchaseAutoHint();
     await refreshSettlementPicks();
+    await refreshExecutionPicks();
   } catch (_e) {
     // ignore on roles without supplier/customer read permission
+  }
+}
+
+async function refreshExecutionPicks() {
+  if (!state.token) return;
+  try {
+    const [warehouses, locations, purchaseOrders, salesOrders] = await Promise.all([
+      api("/api/warehouses"),
+      api("/api/locations"),
+      api("/api/purchase-orders?page=1&pageSize=200&status=approved"),
+      api("/api/sales-orders?page=1&pageSize=200&status=approved")
+    ]);
+    const { rows: poRows } = normalizePagedRows(purchaseOrders);
+    const { rows: soRows } = normalizePagedRows(salesOrders);
+    const purchaseWarehousePick = document.getElementById("execPurchaseWarehousePick");
+    const purchaseLocationPick = document.getElementById("execPurchaseLocationPick");
+    const salesWarehousePick = document.getElementById("execSalesWarehousePick");
+    const salesLocationPick = document.getElementById("execSalesLocationPick");
+    executionOrderCache.purchase = (poRows || []).filter((x) => x.status === "approved" && Number(x.remainingQty ?? 0) > 0.0001);
+    executionOrderCache.sales = (soRows || []).filter((x) => x.status === "approved" && Number(x.remainingQty ?? 0) > 0.0001);
+    if (purchaseWarehousePick) {
+      const opts = ['<option value="">仓库（可选）</option>'];
+      (warehouses || []).forEach((w) => opts.push(`<option value="${w.id}">${w.code} ${w.name}</option>`));
+      purchaseWarehousePick.innerHTML = opts.join("");
+    }
+    if (salesWarehousePick) {
+      const opts = ['<option value="">仓库（可选）</option>'];
+      (warehouses || []).forEach((w) => opts.push(`<option value="${w.id}">${w.code} ${w.name}</option>`));
+      salesWarehousePick.innerHTML = opts.join("");
+    }
+    // 如果仓库只有一个，则采购/销售执行默认带上该仓库，并自动加载其库位；库位若也只有一个则继续默认带上。
+    if (purchaseWarehousePick) {
+      const selected = autoSelectIfSingle("execPurchaseWarehousePick");
+      if (selected) {
+        const whId = Number(purchaseWarehousePick.value || 0);
+        const locRows = whId > 0 ? await api(`/api/locations?warehouseId=${whId}`) : locations;
+        if (purchaseLocationPick) {
+          const opts = ['<option value="">库位（可选）</option>'];
+          (locRows || []).forEach((l) => opts.push(`<option value="${l.id}">${l.code} ${l.name}</option>`));
+          purchaseLocationPick.innerHTML = opts.join("");
+          autoSelectIfSingle("execPurchaseLocationPick");
+        }
+      } else if (purchaseLocationPick) {
+        const opts = ['<option value="">库位（可选）</option>'];
+        (locations || []).forEach((l) => opts.push(`<option value="${l.id}">WH#${l.warehouseId} ${l.code} ${l.name}</option>`));
+        purchaseLocationPick.innerHTML = opts.join("");
+      }
+    }
+    if (salesWarehousePick) {
+      const selected = autoSelectIfSingle("execSalesWarehousePick");
+      if (selected) {
+        const whId = Number(salesWarehousePick.value || 0);
+        const locRows = whId > 0 ? await api(`/api/locations?warehouseId=${whId}`) : locations;
+        if (salesLocationPick) {
+          const opts = ['<option value="">库位（可选）</option>'];
+          (locRows || []).forEach((l) => opts.push(`<option value="${l.id}">${l.code} ${l.name}</option>`));
+          salesLocationPick.innerHTML = opts.join("");
+          autoSelectIfSingle("execSalesLocationPick");
+        }
+      } else if (salesLocationPick) {
+        const opts = ['<option value="">库位（可选）</option>'];
+        (locations || []).forEach((l) => opts.push(`<option value="${l.id}">WH#${l.warehouseId} ${l.code} ${l.name}</option>`));
+        salesLocationPick.innerHTML = opts.join("");
+      }
+    }
+
+    // 仓库&库位创建面板的仓库下拉
+    const newLocWarehousePick = document.getElementById("newLocationWarehousePick");
+    if (newLocWarehousePick) {
+      const opts = ['<option value="">选择仓库</option>'];
+      (warehouses || []).forEach((w) => opts.push(`<option value="${w.id}">${w.code} ${w.name}</option>`));
+      newLocWarehousePick.innerHTML = opts.join("");
+      autoSelectIfSingle("newLocationWarehousePick");
+    }
+    rerenderExecutionOrderOptions("purchase");
+    rerenderExecutionOrderOptions("sales");
+  } catch (_e) {
+    // ignore by permission
+  }
+}
+
+async function createWarehouseFromForm() {
+  ensureToken();
+  const code = inputText("newWarehouseCode");
+  const name = inputText("newWarehouseName");
+  if (name.length < 2) throw new Error("仓库名称至少 2 个字符。");
+  const created = await api("/api/warehouses", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code: code.length >= 2 ? code : undefined, name })
+  });
+  document.getElementById("newWarehouseCode").value = "";
+  document.getElementById("newWarehouseName").value = "";
+  await refreshExecutionPicks();
+  log("创建仓库", created);
+}
+
+async function createLocationFromForm() {
+  ensureToken();
+  const warehouseId = selectNum("newLocationWarehousePick");
+  const code = inputText("newLocationCode");
+  const name = inputText("newLocationName");
+  if (!warehouseId) throw new Error("请先选择仓库。");
+  if (name.length < 2) throw new Error("库位名称至少 2 个字符。");
+  const created = await api("/api/locations", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ warehouseId, code: code.length >= 2 ? code : undefined, name })
+  });
+  document.getElementById("newLocationCode").value = "";
+  document.getElementById("newLocationName").value = "";
+  await refreshExecutionPicks();
+  log("创建库位", created);
+}
+
+async function showExistingWarehousesHint() {
+  // legacy fallback (kept for compatibility)
+  ensureToken();
+  const rows = await api("/api/warehouses");
+  const preview = (rows || []).slice(0, 8).map((w) => `${w.code || "-"} ${w.name || "-"}(ID:${w.id})`).join("；");
+  const more = (rows || []).length > 8 ? ` …等${rows.length}个` : "";
+  showInlineFeedback("whLocActionFeedback", "info", `已有仓库：${preview || "暂无"}${more}`);
+}
+
+async function showExistingLocationsHint() {
+  // legacy fallback (kept for compatibility)
+  ensureToken();
+  const warehouseId = Number(selectNum("newLocationWarehousePick") || 0);
+  const path = warehouseId > 0 ? `/api/locations?warehouseId=${warehouseId}` : "/api/locations";
+  const rows = await api(path);
+  const preview = (rows || []).slice(0, 10).map((l) => `${l.code || "-"} ${l.name || "-"}(ID:${l.id})`).join("；");
+  const more = (rows || []).length > 10 ? ` …等${rows.length}个` : "";
+  showInlineFeedback("whLocActionFeedback", "info", `已有库位：${preview || "暂无"}${more}`);
+}
+
+function hideWhLocSuggest() {
+  if (whSuggestBox) {
+    whSuggestBox.classList.remove("show");
+    whSuggestBox.innerHTML = "";
+  }
+  if (locSuggestBox) {
+    locSuggestBox.classList.remove("show");
+    locSuggestBox.innerHTML = "";
+  }
+}
+
+function showWhLocSuggest(targetEl, title, items) {
+  if (!targetEl) return;
+  const html = [];
+  html.push(`<div class="suggest-title">${title}</div>`);
+  if (!items.length) {
+    html.push(`<div class="suggest-item"><div>暂无数据</div><div class="muted">你可以直接创建新的。</div></div>`);
+  } else {
+    items.slice(0, 20).forEach((x) => {
+      html.push(`<div class="suggest-item"><div>${x.primary}</div><div class="muted">${x.secondary}</div></div>`);
+    });
+    if (items.length > 20) {
+      html.push(`<div class="suggest-item"><div class="muted">… 还有 ${items.length - 20} 条未展示</div></div>`);
+    }
+  }
+  targetEl.innerHTML = html.join("");
+  targetEl.classList.add("show");
+}
+
+async function showExistingWarehousesDropdown(anchorEl) {
+  ensureToken();
+  const rows = await api("/api/warehouses");
+  const items = (rows || []).map((w) => ({
+    primary: `${w.code || "-"}  ${w.name || "-"}`,
+    secondary: `ID:${w.id}`
+  }));
+  if (locSuggestBox) {
+    locSuggestBox.classList.remove("show");
+    locSuggestBox.innerHTML = "";
+  }
+  showWhLocSuggest(whSuggestBox, "已有仓库", items);
+}
+
+async function showExistingLocationsDropdown(anchorEl) {
+  ensureToken();
+  const warehouseId = Number(selectNum("newLocationWarehousePick") || 0);
+  const rows = await api(warehouseId > 0 ? `/api/locations?warehouseId=${warehouseId}` : "/api/locations");
+  const items = (rows || []).map((l) => ({
+    primary: `${l.code || "-"}  ${l.name || "-"}`,
+    secondary: `ID:${l.id}  |  仓库ID:${l.warehouseId}`
+  }));
+  if (whSuggestBox) {
+    whSuggestBox.classList.remove("show");
+    whSuggestBox.innerHTML = "";
+  }
+  showWhLocSuggest(locSuggestBox, warehouseId > 0 ? `已有库位（仓库ID:${warehouseId}）` : "已有库位", items);
+}
+
+function rerenderExecutionOrderOptions(type) {
+  const orderPick = document.getElementById(type === "sales" ? "execSalesOrderPick" : "execPurchaseOrderPick");
+  if (!orderPick) return;
+  const rows = type === "sales" ? executionOrderCache.sales : executionOrderCache.purchase;
+  const label = type === "sales" ? "SO" : "PO";
+  const opts = ['<option value="">选择已审批订单</option>'];
+  rows.forEach((r) => {
+    const settlementText =
+      type === "sales"
+        ? `${zhReceiptStatus(r.receiptStatus)} | 未收:${Number(r.invoiceOpenAmount || 0).toFixed(2)}`
+        : `${zhPaymentStatus(r.paymentStatus)} | 未付:${Number(r.billOpenAmount || 0).toFixed(2)}`;
+    opts.push(
+      `<option value="${r.id}">${label}#${r.id} ${r.orderNo || ""} 金额:${Number(r.totalAmount || 0).toFixed(2)} | ${settlementText}</option>`
+    );
+  });
+  orderPick.innerHTML = opts.join("");
+}
+
+async function loadExecutionOrderItems(orderType, orderId) {
+  const key = `${orderType}:${orderId}`;
+  if (executionOrderItemsCache.has(key)) return executionOrderItemsCache.get(key);
+  const path = orderType === "sales" ? `/api/sales-orders/${orderId}` : `/api/purchase-orders/${orderId}`;
+  const detail = await api(path);
+  const items = detail?.items || [];
+  executionOrderItemsCache.set(key, items);
+  return items;
+}
+
+async function applyExecutionOrderSelection(orderType, orderId) {
+  if (!orderId) return;
+  const orderIdInput = document.getElementById(orderType === "sales" ? "execSalesOrderId" : "execPurchaseOrderId");
+  if (orderIdInput) orderIdInput.value = String(orderId);
+  const items = await loadExecutionOrderItems(orderType, orderId);
+  const productPick = document.getElementById(orderType === "sales" ? "execSalesProductPick" : "execPurchaseProductPick");
+  const batchInput = document.getElementById(orderType === "sales" ? "execSalesBatchNo" : "execPurchaseBatchNo");
+  if (!productPick) return;
+  const opts = ['<option value="">选择商品</option>'];
+  const enriched = (items || []).map((it) => {
+    const remaining = Number(
+      it.remainingQty ?? (Number(it.qty || 0) - Number(orderType === "sales" ? it.deliveredQty || 0 : it.receivedQty || 0))
+    );
+    return { ...it, remainingQty: remaining };
+  });
+  enriched.forEach((it) => {
+    const remaining = Number(it.remainingQty || 0);
+    const hint = orderType === "sales" ? `剩余未发:${remaining}` : `剩余未收:${remaining}`;
+    opts.push(`<option value="${it.productId}">${it.sku || ""} ${it.productName || ""}（${hint} / 订单:${it.qty}）</option>`);
+  });
+  productPick.innerHTML = opts.join("");
+
+  // Auto-select first remaining item; quantity stays manual.
+  const first = enriched.find((x) => Number(x.remainingQty || 0) > 0.0001) || enriched[0];
+  if (first && Number(first.productId) > 0) {
+    productPick.value = String(first.productId);
+    if (batchInput) {
+      batchInput.value = getNextBatchNo({ orderType, orderId, productId: Number(first.productId) });
+    }
+  }
+  void validateExecutionQty(orderType);
+}
+
+async function validateExecutionQty(orderType) {
+  try {
+    const orderId = Number(inputNum(orderType === "sales" ? "execSalesOrderId" : "execPurchaseOrderId") || 0);
+    const productId = Number(selectNum(orderType === "sales" ? "execSalesProductPick" : "execPurchaseProductPick") || 0);
+    const qty = Number(inputNum(orderType === "sales" ? "execSalesQty" : "execPurchaseQty") || 0);
+    const feedbackId = orderType === "sales" ? "execSalesFeedback" : "execPurchaseFeedback";
+    const btnIds =
+      orderType === "sales" ? ["btnCreateDeliveryFlow", "btnCreateSalesReturnFlow"] : ["btnCreateReceiptFlow", "btnCreatePurchaseReturnFlow"];
+    if (!orderId || !productId || !(qty > 0)) {
+      btnIds.forEach((id) => {
+        const btn = document.getElementById(id);
+        if (btn) btn.disabled = false;
+      });
+      return true;
+    }
+    const items = await loadExecutionOrderItems(orderType, orderId);
+    const item = (items || []).find((x) => Number(x.productId || 0) === productId);
+    const remaining = Number(
+      item?.remainingQty ?? (Number(item?.qty || 0) - Number(orderType === "sales" ? item?.deliveredQty || 0 : item?.receivedQty || 0))
+    );
+    const ok = qty <= remaining + 0.0001;
+    btnIds.forEach((id) => {
+      const btn = document.getElementById(id);
+      if (btn) btn.disabled = !ok;
+    });
+    if (!ok) {
+      showInlineFeedback(feedbackId, "error", `数量超出剩余可执行：${qty} > ${Math.max(0, remaining).toFixed(2)}`);
+    } else {
+      clearInlineFeedback(feedbackId);
+    }
+    return ok;
+  } catch (_e) {
+    return true;
   }
 }
 
 async function refreshSettlementPicks() {
   if (!state.token) return;
   try {
-    const [arRows, apRows] = await Promise.all([api("/api/ar/invoices"), api("/api/ap/bills")]);
+    const [arPayload, apPayload] = await Promise.all([
+      api("/api/ar/invoices?page=1&pageSize=200"),
+      api("/api/ap/bills?page=1&pageSize=200")
+    ]);
+    const { rows: arRows } = normalizePagedRows(arPayload);
+    const { rows: apRows } = normalizePagedRows(apPayload);
+    settlementPickCache.ar = (arRows || []).filter((r) => Number(r.totalAmount || 0) - Number(r.receivedAmount || 0) > 0.0001);
+    settlementPickCache.ap = (apRows || []).filter((r) => Number(r.totalAmount || 0) - Number(r.paidAmount || 0) > 0.0001);
+    renderSettlementPicksFromCache();
+  } catch (_e) {
+    // ignore by permission
+  }
+}
+
+function renderSettlementPicksFromCache() {
+  const arRows = settlementPickCache.ar || [];
+  const apRows = settlementPickCache.ap || [];
+  const pickedCustomerId = Number(selectNum("rcCustomerPick") || 0);
+  const pickedSupplierId = Number(selectNum("pySupplierPick") || 0);
+  try {
     const arSelect = document.getElementById("rcArPick");
     const apSelect = document.getElementById("pyApPick");
     if (arSelect) {
       const curr = arSelect.value;
-      const opts = ['<option value="">自动匹配未结应收</option>'];
+      const opts = ['<option value="">请选择应收单据（未结）</option>'];
       (arRows || []).forEach((r) => {
+        if (pickedCustomerId > 0 && Number(r.customerId || 0) !== pickedCustomerId) return;
         const open = Number(r.totalAmount || 0) - Number(r.receivedAmount || 0);
-        opts.push(`<option value="${r.id}">${r.invoiceNo || `AR-${r.id}`} | 客户:${r.customerName || "-"} | 未收:${open.toFixed(2)}</option>`);
+        opts.push(
+          `<option value="${r.id}" data-customer-id="${Number(r.customerId || 0)}">${r.invoiceNo || `AR-${r.id}`} | 客户:${r.customerName || "-"} | 未收:${open.toFixed(2)} | ${zhArFulfillmentStatus(r.fulfillmentStatus)}</option>`
+        );
       });
       arSelect.innerHTML = opts.join("");
       if (curr) arSelect.value = curr;
@@ -1359,10 +2676,13 @@ async function refreshSettlementPicks() {
     }
     if (apSelect) {
       const curr = apSelect.value;
-      const opts = ['<option value="">自动匹配未结应付</option>'];
+      const opts = ['<option value="">请选择应付单据（未结）</option>'];
       (apRows || []).forEach((r) => {
+        if (pickedSupplierId > 0 && Number(r.supplierId || 0) !== pickedSupplierId) return;
         const open = Number(r.totalAmount || 0) - Number(r.paidAmount || 0);
-        opts.push(`<option value="${r.id}">${r.billNo || `AP-${r.id}`} | 供应商:${r.supplierName || "-"} | 未付:${open.toFixed(2)}</option>`);
+        opts.push(
+          `<option value="${r.id}" data-supplier-id="${Number(r.supplierId || 0)}">${r.billNo || `AP-${r.id}`} | 供应商:${r.supplierName || "-"} | 未付:${open.toFixed(2)} | ${zhApFulfillmentStatus(r.fulfillmentStatus)}</option>`
+        );
       });
       apSelect.innerHTML = opts.join("");
       if (curr) apSelect.value = curr;
@@ -1428,7 +2748,7 @@ function renderReceiptPreviewHint() {
   const el = document.getElementById("rcPreviewHint");
   if (!el) return;
   const customer = document.getElementById("rcCustomerPick")?.selectedOptions?.[0]?.textContent?.trim() || "-";
-  const ar = document.getElementById("rcArPick")?.selectedOptions?.[0]?.textContent?.trim() || "自动匹配未结应收";
+  const ar = document.getElementById("rcArPick")?.selectedOptions?.[0]?.textContent?.trim() || "未选择应收单据";
   const amount = Number(inputNum("rcAmount") || 0);
   el.textContent = `预览：客户 ${customer}；应收 ${ar}；收款金额 ${amount ? amount.toFixed(2) : "-"}`;
 }
@@ -1437,9 +2757,31 @@ function renderPaymentPreviewHint() {
   const el = document.getElementById("pyPreviewHint");
   if (!el) return;
   const supplier = document.getElementById("pySupplierPick")?.selectedOptions?.[0]?.textContent?.trim() || "-";
-  const ap = document.getElementById("pyApPick")?.selectedOptions?.[0]?.textContent?.trim() || "自动匹配未结应付";
+  const ap = document.getElementById("pyApPick")?.selectedOptions?.[0]?.textContent?.trim() || "未选择应付单据";
   const amount = Number(inputNum("pyAmount") || 0);
   el.textContent = `预览：供应商 ${supplier}；应付 ${ap}；付款金额 ${amount ? amount.toFixed(2) : "-"}`;
+}
+
+function pickOpenAmount(kind) {
+  if (kind === "receipt") {
+    const id = Number(selectNum("rcArPick") || 0);
+    const row = (settlementPickCache.ar || []).find((x) => Number(x.id || 0) === id);
+    return row ? Math.max(0, Number(row.totalAmount || 0) - Number(row.receivedAmount || 0)) : 0;
+  }
+  const id = Number(selectNum("pyApPick") || 0);
+  const row = (settlementPickCache.ap || []).find((x) => Number(x.id || 0) === id);
+  return row ? Math.max(0, Number(row.totalAmount || 0) - Number(row.paidAmount || 0)) : 0;
+}
+
+function applyAmountShortcut(kind, ratio) {
+  const open = pickOpenAmount(kind);
+  const targetId = kind === "receipt" ? "rcAmount" : "pyAmount";
+  const input = document.getElementById(targetId);
+  if (!input) return;
+  const v = ratio <= 0 ? 0 : open * ratio;
+  input.value = v > 0 ? v.toFixed(2) : "";
+  if (kind === "receipt") renderReceiptPreviewHint();
+  else renderPaymentPreviewHint();
 }
 
 function showPickOptionHint(text) {
@@ -1738,11 +3080,27 @@ async function createReceipt() {
   const arFromInput = inputNum("rcArInvoiceId");
   if (arFromInput) state.arInvoiceId = arFromInput;
   if (!state.arInvoiceId) {
-    const rows = await api("/api/ar/invoices");
-    const open = rows.find((x) => Number(x.totalAmount) > Number(x.receivedAmount));
-    state.arInvoiceId = open?.id || null;
+    const pickId = Number(selectNum("rcArPick") || 0);
+    if (pickId > 0) state.arInvoiceId = pickId;
   }
-  if (!state.arInvoiceId) throw new Error("请先创建并审批销售单，或在参数里填写应收ID。");
+  if (!state.arInvoiceId) {
+    const pickedCustomerId = Number(customerId || 0);
+    const openForCustomer = (settlementPickCache.ar || []).filter(
+      (x) => Number(x.customerId || 0) === pickedCustomerId && Number(x.totalAmount || 0) - Number(x.receivedAmount || 0) > 0.0001
+    );
+    if (openForCustomer.length === 1) {
+      state.arInvoiceId = Number(openForCustomer[0].id || 0) || null;
+      const sel = document.getElementById("rcArPick");
+      if (sel) sel.value = String(state.arInvoiceId || "");
+      updateSelectVisualState("rcArPick");
+      renderReceiptPreviewHint();
+    }
+  }
+  if (!state.arInvoiceId) {
+    showPickOptionHint("收款单：请选择要收款的应收单据（未结）。");
+    focusFirst(["rcArPick"]);
+    throw new Error("收款参数无效：请先选择应收单据（未结）。");
+  }
   if (!customerId || amount <= 0) throw new Error("收款参数无效：请检查客户ID与金额。");
   const result = await api("/api/finance/receipts", {
     method: "POST",
@@ -1770,11 +3128,27 @@ async function createPayment() {
   const apFromInput = inputNum("pyApBillId");
   if (apFromInput) state.apBillId = apFromInput;
   if (!state.apBillId) {
-    const rows = await api("/api/ap/bills");
-    const open = rows.find((x) => Number(x.totalAmount) > Number(x.paidAmount));
-    state.apBillId = open?.id || null;
+    const pickId = Number(selectNum("pyApPick") || 0);
+    if (pickId > 0) state.apBillId = pickId;
   }
-  if (!state.apBillId) throw new Error("请先创建并审批采购单，或在参数里填写应付ID。");
+  if (!state.apBillId) {
+    const pickedSupplierId = Number(supplierId || 0);
+    const openForSupplier = (settlementPickCache.ap || []).filter(
+      (x) => Number(x.supplierId || 0) === pickedSupplierId && Number(x.totalAmount || 0) - Number(x.paidAmount || 0) > 0.0001
+    );
+    if (openForSupplier.length === 1) {
+      state.apBillId = Number(openForSupplier[0].id || 0) || null;
+      const sel = document.getElementById("pyApPick");
+      if (sel) sel.value = String(state.apBillId || "");
+      updateSelectVisualState("pyApPick");
+      renderPaymentPreviewHint();
+    }
+  }
+  if (!state.apBillId) {
+    showPickOptionHint("付款单：请选择要付款的应付单据（未结）。");
+    focusFirst(["pyApPick"]);
+    throw new Error("付款参数无效：请先选择应付单据（未结）。");
+  }
   if (!supplierId || amount <= 0) throw new Error("付款参数无效：请检查供应商ID与金额。");
   const result = await api("/api/finance/payments", {
     method: "POST",
@@ -1787,6 +3161,126 @@ async function createPayment() {
     })
   });
   log("付款单", result);
+}
+
+function readExecPayload(prefix) {
+  const orderId = Number(inputNum(`${prefix}OrderId`) || 0);
+  const productId = Number(selectNum(`${prefix}ProductPick`) || 0);
+  const qty = Number(inputNum(`${prefix}Qty`) || 0);
+  const warehouseId = Number(selectNum(`${prefix}WarehousePick`) || 0);
+  const locationId = Number(selectNum(`${prefix}LocationPick`) || 0);
+  const batchNo = inputText(`${prefix}BatchNo`) || undefined;
+  if (!orderId || !productId || !(qty > 0)) throw new Error("执行参数无效：请填写订单ID、商品和数量。");
+  return {
+    orderId,
+    warehouseId: warehouseId || undefined,
+    locationId: locationId || undefined,
+    items: [{ productId, qty, batchNo }]
+  };
+}
+
+async function createPurchaseReceiptFlow() {
+  if (executionSubmitting.purchase) throw new Error("采购执行处理中，请勿重复提交。");
+  executionSubmitting.purchase = true;
+  const btnA = document.getElementById("btnCreateReceiptFlow");
+  const btnB = document.getElementById("btnCreatePurchaseReturnFlow");
+  if (btnA) btnA.disabled = true;
+  if (btnB) btnB.disabled = true;
+  try {
+  ensureToken();
+  const payload = readExecPayload("execPurchase");
+  const result = await api(`/api/purchase-orders/${payload.orderId}/receipts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  bumpBatchSeq({ orderType: "purchase", orderId: payload.orderId, productId: payload.items?.[0]?.productId });
+  await refreshExecutionAfterAction("purchase", payload.orderId);
+  await refreshAll({ source: "manual" });
+  log("采购收货", result);
+  } finally {
+    executionSubmitting.purchase = false;
+    if (btnA) btnA.disabled = false;
+    if (btnB) btnB.disabled = false;
+  }
+}
+
+async function createSalesDeliveryFlow() {
+  if (executionSubmitting.sales) throw new Error("销售执行处理中，请勿重复提交。");
+  executionSubmitting.sales = true;
+  const btnA = document.getElementById("btnCreateDeliveryFlow");
+  const btnB = document.getElementById("btnCreateSalesReturnFlow");
+  if (btnA) btnA.disabled = true;
+  if (btnB) btnB.disabled = true;
+  try {
+  ensureToken();
+  const payload = readExecPayload("execSales");
+  const result = await api(`/api/sales-orders/${payload.orderId}/deliveries`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  bumpBatchSeq({ orderType: "sales", orderId: payload.orderId, productId: payload.items?.[0]?.productId });
+  await refreshExecutionAfterAction("sales", payload.orderId);
+  await refreshAll({ source: "manual" });
+  log("销售发货", result);
+  } finally {
+    executionSubmitting.sales = false;
+    if (btnA) btnA.disabled = false;
+    if (btnB) btnB.disabled = false;
+  }
+}
+
+async function createPurchaseReturnFlow() {
+  if (executionSubmitting.purchase) throw new Error("采购执行处理中，请勿重复提交。");
+  executionSubmitting.purchase = true;
+  const btnA = document.getElementById("btnCreateReceiptFlow");
+  const btnB = document.getElementById("btnCreatePurchaseReturnFlow");
+  if (btnA) btnA.disabled = true;
+  if (btnB) btnB.disabled = true;
+  try {
+  ensureToken();
+  const payload = readExecPayload("execPurchase");
+  const result = await api(`/api/purchase-orders/${payload.orderId}/returns`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  bumpBatchSeq({ orderType: "purchase", orderId: payload.orderId, productId: payload.items?.[0]?.productId });
+  await refreshExecutionAfterAction("purchase", payload.orderId);
+  await refreshAll({ source: "manual" });
+  log("采购退货", result);
+  } finally {
+    executionSubmitting.purchase = false;
+    if (btnA) btnA.disabled = false;
+    if (btnB) btnB.disabled = false;
+  }
+}
+
+async function createSalesReturnFlow() {
+  if (executionSubmitting.sales) throw new Error("销售执行处理中，请勿重复提交。");
+  executionSubmitting.sales = true;
+  const btnA = document.getElementById("btnCreateDeliveryFlow");
+  const btnB = document.getElementById("btnCreateSalesReturnFlow");
+  if (btnA) btnA.disabled = true;
+  if (btnB) btnB.disabled = true;
+  try {
+  ensureToken();
+  const payload = readExecPayload("execSales");
+  const result = await api(`/api/sales-orders/${payload.orderId}/returns`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  bumpBatchSeq({ orderType: "sales", orderId: payload.orderId, productId: payload.items?.[0]?.productId });
+  await refreshExecutionAfterAction("sales", payload.orderId);
+  await refreshAll({ source: "manual" });
+  log("销售退货", result);
+  } finally {
+    executionSubmitting.sales = false;
+    if (btnA) btnA.disabled = false;
+    if (btnB) btnB.disabled = false;
+  }
 }
 
 async function queryProducts() {
@@ -1828,17 +3322,29 @@ async function loadPurchaseApprovals() {
   ensureToken();
   approvalType = "purchase";
   currentApprovalView = "purchase";
-  const rows = await api("/api/purchase-orders");
+  const payload = await api(
+    `/api/purchase-orders?page=${approvalPager.page}&pageSize=${approvalPager.pageSize}&q=${encodeURIComponent(
+      approvalSearchValue()
+    )}&status=${encodeURIComponent(approvalStatusFilterValue())}&stage=${encodeURIComponent(
+      approvalStageFilterValue()
+    )}&actionableOnly=${document.getElementById("chkApprovalActionableOnly")?.checked ? "1" : "0"}`
+  );
+  const { rows, total, page, pageSize } = normalizePagedRows(payload);
+  approvalPager.total = total;
+  approvalPager.page = page;
+  approvalPager.pageSize = pageSize;
   approvalRowsKind = "purchase";
   approvalRowsCache = rows;
+  approvalCheckedIds.clear();
   const idInput = document.getElementById("approvalOrderId");
   if (idInput) idInput.value = "";
   syncApprovalSelectedIdHint();
   setRejectInputVisible(false);
   void enrichApprovalRejectSummaries(approvalRowsCache, "purchase");
-  setApprovalStatusFilter("draft");
+  setApprovalStatusFilter("all");
   setApprovalQuickFilterDefault();
   renderApprovalTableFromCache();
+  syncApprovalPagerInfo();
   log("审批-采购单", rows);
   syncApprovalContextLabel();
   syncApprovalViewLabel();
@@ -1849,17 +3355,29 @@ async function loadSalesApprovals() {
   ensureToken();
   approvalType = "sales";
   currentApprovalView = "sales";
-  const rows = await api("/api/sales-orders");
+  const payload = await api(
+    `/api/sales-orders?page=${approvalPager.page}&pageSize=${approvalPager.pageSize}&q=${encodeURIComponent(
+      approvalSearchValue()
+    )}&status=${encodeURIComponent(approvalStatusFilterValue())}&stage=${encodeURIComponent(
+      approvalStageFilterValue()
+    )}&actionableOnly=${document.getElementById("chkApprovalActionableOnly")?.checked ? "1" : "0"}`
+  );
+  const { rows, total, page, pageSize } = normalizePagedRows(payload);
+  approvalPager.total = total;
+  approvalPager.page = page;
+  approvalPager.pageSize = pageSize;
   approvalRowsKind = "sales";
   approvalRowsCache = rows;
+  approvalCheckedIds.clear();
   const idInput = document.getElementById("approvalOrderId");
   if (idInput) idInput.value = "";
   syncApprovalSelectedIdHint();
   setRejectInputVisible(false);
   void enrichApprovalRejectSummaries(approvalRowsCache, "sales");
-  setApprovalStatusFilter("draft");
+  setApprovalStatusFilter("all");
   setApprovalQuickFilterDefault();
   renderApprovalTableFromCache();
+  syncApprovalPagerInfo();
   log("审批-销售单", rows);
   syncApprovalContextLabel();
   syncApprovalViewLabel();
@@ -1869,21 +3387,59 @@ async function loadSalesApprovals() {
 async function loadPendingApprovals() {
   ensureToken();
   currentApprovalView = "pending";
-  const rows = await api("/api/approvals/pending");
+  const payload = await api(
+    `/api/approvals/pending?page=${approvalPager.page}&pageSize=${approvalPager.pageSize}&q=${encodeURIComponent(
+      approvalSearchValue()
+    )}&status=${encodeURIComponent(approvalStatusFilterValue())}&stage=${encodeURIComponent(approvalStageFilterValue())}`
+  );
+  const { rows, total, page, pageSize } = normalizePagedRows(payload);
+  approvalPager.total = total;
+  approvalPager.page = page;
+  approvalPager.pageSize = pageSize;
   approvalRowsKind = "pending";
   approvalRowsCache = rows;
+  approvalCheckedIds.clear();
   const idInput = document.getElementById("approvalOrderId");
   if (idInput) idInput.value = "";
   syncApprovalSelectedIdHint();
   setRejectInputVisible(false);
   void enrichApprovalRejectSummaries(approvalRowsCache, approvalType);
-  setApprovalStatusFilter("all");
+  // pending view: default to actionable submitted items
+  setApprovalStatusFilter("submitted");
+  const box = document.getElementById("chkApprovalActionableOnly");
+  if (box) box.checked = true;
   setApprovalQuickFilterDefault();
   renderApprovalTableFromCache();
+  syncApprovalPagerInfo();
   log("审批-我的待审批", rows);
   syncApprovalContextLabel("mixed");
   syncApprovalViewLabel();
   renderRoleTodoFocus();
+}
+
+async function loadAbnormalApprovals() {
+  ensureToken();
+  approvalPager.page = 1;
+  resetApprovalListFilters();
+  const stageEl = document.getElementById("approvalStageFilter");
+  if (stageEl) stageEl.value = "abnormal";
+  if (hasPermission("purchase:read")) {
+    await loadPurchaseApprovals();
+  } else if (hasPermission("sales:read")) {
+    await loadSalesApprovals();
+  } else if (hasPermission("purchase:approve") || hasPermission("sales:approve")) {
+    await loadPendingApprovals();
+  }
+  setApprovalStatusFilter("all");
+  const box = document.getElementById("chkApprovalActionableOnly");
+  if (box) box.checked = false;
+  if (stageEl) stageEl.value = "abnormal";
+  renderApprovalTableFromCache();
+  syncApprovalPagerInfo();
+  const shown = getFilteredApprovalRows(approvalRowsCache || []);
+  if (!shown.length) {
+    showActionWarn("当前没有异常单据。");
+  }
 }
 
 async function loadRoleApprovalWorkspace() {
@@ -1912,17 +3468,23 @@ async function loadRoleApprovalWorkspace() {
 function selectApprovalRow(orderType, row) {
   const idInput = document.getElementById("approvalOrderId");
   if (idInput) idInput.value = String(row.id ?? "");
+  approvalSelectedRow = row || null;
   approvalType = orderType === "sales" ? "sales" : "purchase";
   syncApprovalContextLabel();
   syncApprovalSelectedIdHint();
-  approvalDetail.textContent = "正在加载表头与明细…";
+  approvalDetail.innerHTML = "<div class='muted'>正在加载表头与明细…</div>";
   void loadApprovalOrderDetail(orderType, row.id);
+  // Auto-load timeline when a row is selected.
+  approvalTimeline.innerHTML = "<div class='muted'>正在加载审批时间轴…</div>";
+  void loadApprovalTimeline().catch((e) => {
+    approvalTimeline.innerHTML = `<div class='warn'>审批时间轴加载失败：${escapeHtml(e?.message || String(e))}</div>`;
+  });
 }
 
 async function loadApprovalOrderDetail(orderType, id) {
   const oid = Number(id);
   if (!Number.isFinite(oid) || oid <= 0) {
-    approvalDetail.textContent = "无效的单据 ID。";
+    approvalDetail.innerHTML = "<div class='warn'>无效的单据 ID。</div>";
     return;
   }
   const path = orderType === "sales" ? `/api/sales-orders/${oid}` : `/api/purchase-orders/${oid}`;
@@ -1930,15 +3492,13 @@ async function loadApprovalOrderDetail(orderType, id) {
     const data = await api(path);
     const timeline = await api(`/api/approvals/${orderType}/${oid}/timeline`).catch(() => []);
     const rejectMeta = extractLatestRejectMeta(timeline);
-    approvalDetail.textContent = orderType === "sales" ? formatSoDetail(data, rejectMeta) : formatPoDetail(data, rejectMeta);
+    approvalDetail.innerHTML = renderApprovalDetailHtml(orderType, data, rejectMeta);
   } catch (e) {
     const typeText = orderType === "sales" ? "销售单" : "采购单";
-    approvalDetail.textContent = [
-      `【${typeText}详情加载失败】`,
-      `单据ID：${oid}`,
-      `原因：${e.message || e}`,
-      "可尝试：先点击“加载采购单/销售单”刷新列表后重试。"
-    ].join("\n");
+    approvalDetail.innerHTML = `<div class="warn">【${typeText}详情加载失败】</div>
+      <div class="muted">单据ID：${oid}</div>
+      <div class="muted">原因：${escapeHtml(e.message || e)}</div>
+      <div class="muted">可尝试：先点击“加载采购单/销售单”刷新列表后重试。</div>`;
   }
 }
 
@@ -1995,14 +3555,61 @@ async function loadApprovalTimeline() {
   if (!rows.length) {
     approvalTimeline.innerHTML = "<div class='muted'>暂无审批轨迹。</div>";
   } else {
-    approvalTimeline.innerHTML = `<ul class="timeline">${rows
-      .map(
-        (r) =>
-          `<li><div><b>${zhApprovalAction(r.action)}</b></div><div class="meta">${r.createdAt} · ${r.username || "system"}</div>${
-            r.detail ? `<div class="meta">${r.detail}</div>` : ""
-          }</li>`
-      )
-      .join("")}</ul>`;
+    const parseDetail = (v) => {
+      if (!v) return null;
+      if (typeof v === "object") return v;
+      try {
+        return JSON.parse(String(v));
+      } catch (_e) {
+        return null;
+      }
+    };
+    const humanAction = (action) => {
+      const s = String(action || "");
+      const tail = s.includes(".") ? s.split(".").pop() : s;
+      const zh = zhApprovalAction(tail);
+      if (zh && zh !== tail) return zh;
+      if (tail === "create") return "创建";
+      if (tail === "submit") return "提交";
+      if (tail === "approve") return "审批通过";
+      if (tail === "reject") return "驳回";
+      if (tail === "void") return "作废";
+      if (tail === "reverse") return "冲销";
+      return s || "未知动作";
+    };
+    approvalTimeline.innerHTML = `<div class="approval-timeline-list">${rows
+      .map((r) => {
+        const d = parseDetail(r.detail);
+        const fromTo =
+          d && (d.from || d.to)
+            ? `<div class="approval-timeline-line"><span class="muted">状态流转：</span>${escapeHtml(
+                zhOrderStatus(d.from || "-")
+              )} → ${escapeHtml(zhOrderStatus(d.to || "-"))}</div>`
+            : "";
+        const comment = d && d.comment ? `<div class="approval-timeline-line"><span class="muted">审批意见：</span>${escapeHtml(d.comment)}</div>` : "";
+        const biz =
+          d && (d.orderNo || d.totalAmount != null || d.supplierId || d.customerId)
+            ? `<div class="approval-timeline-line"><span class="muted">业务信息：</span>${escapeHtml(
+                [d.orderNo ? `单号 ${d.orderNo}` : "", d.supplierId ? `供应商 ${d.supplierId}` : "", d.customerId ? `客户 ${d.customerId}` : "", d.totalAmount != null ? `金额 ${d.totalAmount}` : ""]
+                  .filter(Boolean)
+                  .join("，")
+              )}</div>`
+            : "";
+        const raw = r.detail
+          ? `<details class="approval-timeline-raw"><summary>展开原始详情</summary><pre>${escapeHtml(
+              typeof r.detail === "string" ? r.detail : JSON.stringify(r.detail, null, 2)
+            )}</pre></details>`
+          : "";
+        return `<div class="approval-timeline-item">
+          <div class="approval-timeline-title">${escapeHtml(humanAction(r.action))}</div>
+          <div class="approval-timeline-meta">${escapeHtml(r.createdAt || "-")} · ${escapeHtml(r.username || "system")}</div>
+          ${fromTo}
+          ${comment}
+          ${biz}
+          ${raw}
+        </div>`;
+      })
+      .join("")}</div>`;
   }
   log("审批-时间线", rows);
 }
@@ -2060,29 +3667,114 @@ async function doApprovalAction(action) {
   });
   log(`审批动作-${approvalType}-${action}`, res);
   if (action === "reject") {
-    const nextStatusText = zhOrderStatus(res?.nextStatus || "draft");
-    log("审批提示", `单据已驳回并回到「${nextStatusText}」，可修改后再次提交。`);
+    const nextStatusText = zhOrderStatus(res?.nextStatus || "rejected");
+    log("审批提示", `单据已驳回，状态变更为「${nextStatusText}」。可修改后再次提交。`);
     showApprovalActionHint(`已驳回，当前状态：${nextStatusText}。`);
-    if (String(res?.nextStatus || "") === "draft") {
-      if (notificationBar && /已从待审批移至草稿列表/.test(String(notificationBar.textContent || ""))) {
-        notificationBar.textContent = "通知：暂无新消息";
-      }
-      if (orderType === "sales") {
-        await loadSalesApprovals();
-      } else {
-        await loadPurchaseApprovals();
-      }
-      const idInput = document.getElementById("approvalOrderId");
-      if (idInput) idInput.value = String(id);
-      syncApprovalSelectedIdHint();
-      setRejectInputVisible(false);
-      await loadApprovalOrderDetail(orderType, id);
-      return;
-    }
   }
   if (action !== "reject") setRejectInputVisible(false);
   await loadPendingApprovals();
   await loadApprovalOrderDetail(approvalType, id);
+}
+
+async function doApprovalActionById(orderType, id, action, comment = "") {
+  const route = orderType === "purchase" ? `/api/purchase-orders/${id}/action` : `/api/sales-orders/${id}/action`;
+  return api(route, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action, comment })
+  });
+}
+
+async function doBatchApprovalAction(action) {
+  ensureToken();
+  const raw = String(document.getElementById("approvalBatchIds")?.value || "").trim();
+  const typedIds = raw
+    .split(/[,\s]+/)
+    .map((x) => Number(x))
+    .filter((x) => Number.isFinite(x) && x > 0);
+  const ids = approvalCheckedIds.size ? Array.from(approvalCheckedIds) : typedIds;
+  if (!ids.length) throw new Error("请先输入批量审批ID。");
+  const comment = String(document.getElementById("approvalComment")?.value || "").trim();
+  if (action === "reject" && !comment) throw new Error("批量驳回前请填写驳回意见。");
+  const okToRun = window.confirm(`将批量执行「${zhApprovalAction(action)}」共 ${ids.length} 条，是否继续？`);
+  if (!okToRun) return;
+  const mixed = approvalRowsKind === "pending";
+  const items = ids
+    .map((id) => {
+      const row = (approvalRowsCache || []).find((x) => Number(x.id || 0) === id);
+      const t =
+        approvalRowsKind === "pending"
+          ? String(row?.orderType || approvalType || "purchase")
+          : String(approvalType || "purchase");
+      return { orderType: t === "sales" ? "sales" : "purchase", id };
+    })
+    .filter((x) => x.id > 0);
+  const payload = mixed ? { orderType: "mixed", action, items, comment: comment || undefined } : { orderType: approvalType, action, ids, comment: comment || undefined };
+  const result = await api("/api/approvals/batch-action", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  const ok = Number(result?.successCount || 0);
+  const fail = Number(result?.failureCount || 0);
+  const failures = Array.isArray(result?.failures) ? result.failures : [];
+  showActionOk(`批量${zhApprovalAction(action)}完成：成功 ${ok}，失败 ${fail}`);
+  if (fail > 0 && failures.length) {
+    downloadCsv(
+      `approval_batch_failures_${Date.now()}.csv`,
+      failures,
+      [
+        { label: "ID", getter: (r) => r.id },
+        { label: "失败原因", getter: (r) => r.reason }
+      ]
+    );
+  }
+  if (currentApprovalView === "pending") await loadPendingApprovals();
+  else if (approvalType === "sales") await loadSalesApprovals();
+  else await loadPurchaseApprovals();
+}
+
+function fillBatchIdsFromCurrentFilter() {
+  const rows = getFilteredApprovalRows(approvalRowsCache || []);
+  const ids = rows
+    .map((r) => Number(r.id || 0))
+    .filter((id) => Number.isFinite(id) && id > 0);
+  const input = document.getElementById("approvalBatchIds");
+  if (!input) return;
+  input.value = ids.join(",");
+  if (!ids.length) {
+    showActionWarn("当前筛选结果没有可填充的ID。");
+    return;
+  }
+  showActionOk(`已填充 ${ids.length} 条ID。`);
+}
+
+function selectAllApprovalRows() {
+  const rows = getFilteredApprovalRows(approvalRowsCache || []);
+  rows.forEach((r) => {
+    const id = Number(r?.id || 0);
+    if (id > 0) approvalCheckedIds.add(id);
+  });
+  const input = document.getElementById("approvalBatchIds");
+  if (input) input.value = Array.from(approvalCheckedIds).join(",");
+  renderApprovalTableFromCache();
+  showActionOk(`已勾选 ${approvalCheckedIds.size} 条。`);
+}
+
+function jumpToAbnormalReason() {
+  if (!approvalSelectedRow) {
+    showActionWarn("请先在审批列表选择一条单据。");
+    return;
+  }
+  const kind = approvalRowsKind === "pending" ? String(approvalSelectedRow.orderType || approvalType || "purchase") : approvalRowsKind;
+  const stageKey = kind === "sales" ? approvalStageKeyFromRow(approvalSelectedRow) : approvalStageKeyFromRow(approvalSelectedRow);
+  if (stageKey !== "abnormal") {
+    showActionWarn("当前单据不是异常阶段。");
+    return;
+  }
+  document.getElementById("approvalOrderId").value = String(approvalSelectedRow.id || "");
+  loadApprovalTimeline();
+  showApprovalActionHint("已定位异常：请先看时间轴，再看右侧单据详情中的阶段依据。");
 }
 
 function copyApprovalDetailCurl() {
@@ -2114,6 +3806,39 @@ function bind(id, fn) {
   el.addEventListener("click", async () => {
     try {
       await fn();
+      const successTips = {
+        btnConfirmPurchase: "采购单已创建",
+        btnConfirmSales: "销售单已创建",
+        btnConfirmReceipt: "收款单已创建",
+        btnConfirmPayment: "付款单已创建",
+        btnCreateReceiptFlow: "采购收货已提交",
+        btnCreateDeliveryFlow: "销售发货已提交",
+        btnCreatePurchaseReturnFlow: "采购退货已提交",
+        btnCreateSalesReturnFlow: "销售退货已提交",
+        btnWarehouseCreate: "仓库已创建",
+        btnLocationCreate: "库位已创建"
+      };
+      const inlineSuccessMap = {
+        btnConfirmPurchase: "poActionFeedback",
+        btnConfirmSales: "soActionFeedback",
+        btnConfirmReceipt: "rcActionFeedback",
+        btnConfirmPayment: "pyActionFeedback",
+        btnCreateReceiptFlow: "execPurchaseFeedback",
+        btnCreatePurchaseReturnFlow: "execPurchaseFeedback",
+        btnCreateDeliveryFlow: "execSalesFeedback",
+        btnCreateSalesReturnFlow: "execSalesFeedback",
+        btnWarehouseCreate: "whLocActionFeedback",
+        btnLocationCreate: "whLocActionFeedback"
+      };
+      clearInlineFeedback();
+      if (successTips[id]) {
+        showActionOk(successTips[id]);
+        if (inlineSuccessMap[id]) {
+          showInlineFeedback(inlineSuccessMap[id], "success", `成功：${successTips[id]}`);
+        } else {
+          showActionToast("success", successTips[id]);
+        }
+      }
     } catch (err) {
       const msg = err?.message || String(err);
       if (id === "btnLogin" && loginFormStatus) {
@@ -2128,7 +3853,28 @@ function bind(id, fn) {
         "btnVoidApproval",
         "btnReverseApproval"
       ]);
+      const inlineErrorMap = {
+        btnConfirmPurchase: "poActionFeedback",
+        btnConfirmSales: "soActionFeedback",
+        btnConfirmReceipt: "rcActionFeedback",
+        btnConfirmPayment: "pyActionFeedback",
+        btnCreateReceiptFlow: "execPurchaseFeedback",
+        btnCreatePurchaseReturnFlow: "execPurchaseFeedback",
+        btnCreateDeliveryFlow: "execSalesFeedback",
+        btnCreateSalesReturnFlow: "execSalesFeedback",
+        btnWarehouseCreate: "whLocActionFeedback",
+        btnLocationCreate: "whLocActionFeedback"
+      };
+      clearInlineFeedback();
       if (approvalActionIds.has(id)) showApprovalActionHint(msg);
+      if (id !== "btnLogin") {
+        showActionWarn(msg);
+        if (inlineErrorMap[id]) {
+          showInlineFeedback(inlineErrorMap[id], "error", `失败：${msg}`);
+        } else {
+          showActionToast("error", msg);
+        }
+      }
       log("错误", msg);
     }
   });
@@ -2160,27 +3906,55 @@ function renderProductsFromCache() {
 }
 async function queryAr() {
   ensureToken();
-  const rows = await api("/api/ar/invoices");
+  const meta = serverPager.ar;
+  const payload = await api(`/api/ar/invoices?page=${meta.page}&pageSize=${meta.pageSize}`);
+  const { rows, total, page, pageSize } = normalizePagedRows(payload);
+  meta.total = total;
+  meta.page = page;
+  meta.pageSize = pageSize;
   cache.ar = rows;
-  pagerState.ar.page = 1;
   rerenderFromCache("ar");
+  syncSimplePager("ar", "应收");
   updateKpis();
   log("应收发票", rows);
   renderRoleTodoFocus();
 }
 function renderArFromCache() {
   const rows = cache.ar;
-  const filtered = rows.filter((r) =>
-    textMatchEx(r, ["invoiceNo", "customerName", "status"], filters.ar.value.trim(), [(row) => zhArApStatus(row.status)])
+  const stageFilter = String(document.getElementById("arStageFilter")?.value || "all");
+  const sortMode = String(document.getElementById("arSort")?.value || "id_desc");
+  let filtered = rows.filter((r) =>
+    textMatchEx(r, ["invoiceNo", "customerName", "status"], filters.ar.value.trim(), [
+      (row) => zhArApStatus(row.status),
+      (row) => zhArFulfillmentStatus(row.fulfillmentStatus),
+      (row) => stageLabelFromKey(arStageKeyFromRow(row), "sales")
+    ])
   );
-  const pageRows = paginate("ar", filtered);
+  if (stageFilter !== "all") {
+    filtered = filtered.filter((r) => arStageKeyFromRow(r) === stageFilter);
+  }
+  if (sortMode === "stage_abnormal_first") {
+    const weight = (r) => {
+      const k = arStageKeyFromRow(r);
+      if (k === "abnormal") return 0;
+      if (k === "todo") return 1;
+      if (k === "doing") return 2;
+      if (k === "wait_settle") return 3;
+      if (k === "settling") return 4;
+      if (k === "done") return 5;
+      return 9;
+    };
+    filtered = [...filtered].sort((a, b) => weight(a) - weight(b) || Number(b.id || 0) - Number(a.id || 0));
+  }
   renderTable(
     tableTargets.ar,
-    pageRows,
+    filtered,
     [
       { label: "ID", getter: (r) => r.id },
       { label: "发票号", getter: (r) => r.invoiceNo },
       { label: "客户", getter: (r) => r.customerName },
+      { label: "阶段", getter: (r) => stageBadgeHtml(stageLabelFromKey(arStageKeyFromRow(r), "sales")) },
+      { label: "发货", getter: (r) => zhArFulfillmentStatus(r.fulfillmentStatus) },
       { label: "总金额", getter: (r) => r.totalAmount },
       { label: "已收金额", getter: (r) => r.receivedAmount },
       { label: "状态", getter: (r) => zhArApStatus(r.status) }
@@ -2195,27 +3969,55 @@ function renderArFromCache() {
 }
 async function queryAp() {
   ensureToken();
-  const rows = await api("/api/ap/bills");
+  const meta = serverPager.ap;
+  const payload = await api(`/api/ap/bills?page=${meta.page}&pageSize=${meta.pageSize}`);
+  const { rows, total, page, pageSize } = normalizePagedRows(payload);
+  meta.total = total;
+  meta.page = page;
+  meta.pageSize = pageSize;
   cache.ap = rows;
-  pagerState.ap.page = 1;
   rerenderFromCache("ap");
+  syncSimplePager("ap", "应付");
   updateKpis();
   log("应付账单", rows);
   renderRoleTodoFocus();
 }
 function renderApFromCache() {
   const rows = cache.ap;
-  const filtered = rows.filter((r) =>
-    textMatchEx(r, ["billNo", "supplierName", "status"], filters.ap.value.trim(), [(row) => zhArApStatus(row.status)])
+  const stageFilter = String(document.getElementById("apStageFilter")?.value || "all");
+  const sortMode = String(document.getElementById("apSort")?.value || "id_desc");
+  let filtered = rows.filter((r) =>
+    textMatchEx(r, ["billNo", "supplierName", "status"], filters.ap.value.trim(), [
+      (row) => zhArApStatus(row.status),
+      (row) => zhApFulfillmentStatus(row.fulfillmentStatus),
+      (row) => stageLabelFromKey(apStageKeyFromRow(row), "purchase")
+    ])
   );
-  const pageRows = paginate("ap", filtered);
+  if (stageFilter !== "all") {
+    filtered = filtered.filter((r) => apStageKeyFromRow(r) === stageFilter);
+  }
+  if (sortMode === "stage_abnormal_first") {
+    const weight = (r) => {
+      const k = apStageKeyFromRow(r);
+      if (k === "abnormal") return 0;
+      if (k === "todo") return 1;
+      if (k === "doing") return 2;
+      if (k === "wait_settle") return 3;
+      if (k === "settling") return 4;
+      if (k === "done") return 5;
+      return 9;
+    };
+    filtered = [...filtered].sort((a, b) => weight(a) - weight(b) || Number(b.id || 0) - Number(a.id || 0));
+  }
   renderTable(
     tableTargets.ap,
-    pageRows,
+    filtered,
     [
       { label: "ID", getter: (r) => r.id },
       { label: "账单号", getter: (r) => r.billNo },
       { label: "供应商", getter: (r) => r.supplierName },
+      { label: "阶段", getter: (r) => stageBadgeHtml(stageLabelFromKey(apStageKeyFromRow(r), "purchase")) },
+      { label: "收货", getter: (r) => zhApFulfillmentStatus(r.fulfillmentStatus) },
       { label: "总金额", getter: (r) => r.totalAmount },
       { label: "已付金额", getter: (r) => r.paidAmount },
       { label: "状态", getter: (r) => zhArApStatus(r.status) }
@@ -2266,7 +4068,7 @@ function renderJournalsFromCache() {
       clickable: true,
       onRowClick: (row) => {
         const full = cache.journals.find((x) => x.entryNo === row.entryNo);
-        journalDetail.textContent = formatJournalDetail(full ?? row);
+        journalDetail.innerHTML = renderJournalDetailHtml(full ?? row);
       }
     }
   );
@@ -2393,14 +4195,25 @@ async function runAll() {
 }
 
 function setActivePanel(panelId) {
+  const appShell = document.getElementById("appShell");
+  if (appShell) {
+    const formPanels = new Set(["panelCreate", "panelTrend"]);
+    const mode = formPanels.has(panelId) ? "form" : "table";
+    appShell.classList.toggle("mode-form", mode === "form");
+    appShell.classList.toggle("mode-table", mode === "table");
+  }
+  const mainWorkspaceCard = document.getElementById("mainWorkspaceCard");
+  if (mainWorkspaceCard) {
+    mainWorkspaceCard.style.display = panelId === "panelCreate" ? "" : "none";
+  }
   tabButtons.forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.panel === panelId);
   });
   moduleNavButtons.forEach((btn) => {
     btn.classList.toggle("nav-active", btn.dataset.panel === panelId);
   });
-  Object.entries(panels).forEach(([id, panel]) => {
-    panel.classList.toggle("active", id === panelId);
+  document.querySelectorAll(".panel").forEach((panel) => {
+    panel.classList.toggle("active", panel.id === panelId);
   });
   if (currentModuleTitle) currentModuleTitle.textContent = panelTitles[panelId] || "数据看板";
   persistCurrentPanel(panelId);
@@ -2556,15 +4369,61 @@ bind("btnReceipt", createReceipt);
 bind("btnPayment", createPayment);
 bind("btnProducts", queryProducts);
 bind("btnProductAdd", addProductFromForm);
-bind("btnLoadPoApprovals", loadPurchaseApprovals);
-bind("btnLoadSoApprovals", loadSalesApprovals);
-bind("btnLoadPendingApprovals", loadPendingApprovals);
+bind("btnLoadPoApprovals", async () => {
+  resetApprovalListFilters();
+  approvalPager.page = 1;
+  await loadPurchaseApprovals();
+});
+bind("btnLoadSoApprovals", async () => {
+  resetApprovalListFilters();
+  approvalPager.page = 1;
+  await loadSalesApprovals();
+});
+bind("btnLoadPendingApprovals", async () => {
+  approvalPager.page = 1;
+  await loadPendingApprovals();
+});
+bind("btnLoadAbnormalApprovals", async () => {
+  approvalPager.page = 1;
+  await loadAbnormalApprovals();
+});
 bind("btnResetApprovalView", loadRoleApprovalWorkspace);
 bind("btnLoadApprovalSla", loadApprovalSla);
 bind("btnLoadOverdueApprovals", loadOverdueApprovals);
 bind("btnLoadTimeline", loadApprovalTimeline);
+bind("btnApprovalPrev", async () => {
+  approvalPager.page = Math.max(1, approvalPager.page - 1);
+  if (currentApprovalView === "pending") await loadPendingApprovals();
+  else if (currentApprovalView === "sales") await loadSalesApprovals();
+  else await loadPurchaseApprovals();
+});
+bind("btnApprovalNext", async () => {
+  approvalPager.page += 1;
+  if (currentApprovalView === "pending") await loadPendingApprovals();
+  else if (currentApprovalView === "sales") await loadSalesApprovals();
+  else await loadPurchaseApprovals();
+});
+bind("btnApprovalJump", async () => {
+  const v = Number(document.getElementById("approvalPageJump")?.value || 0);
+  if (!(v > 0)) return;
+  approvalPager.page = v;
+  if (currentApprovalView === "pending") await loadPendingApprovals();
+  else if (currentApprovalView === "sales") await loadSalesApprovals();
+  else await loadPurchaseApprovals();
+});
+document.getElementById("approvalPageSize")?.addEventListener("change", async (e) => {
+      approvalPager.pageSize = Number(e.target.value || 10);
+  approvalPager.page = 1;
+  savePagerPrefs();
+  if (currentApprovalView === "pending") await loadPendingApprovals();
+  else if (currentApprovalView === "sales") await loadSalesApprovals();
+  else await loadPurchaseApprovals();
+});
 bind("btnSubmitApproval", async () => doApprovalAction("submit"));
 bind("btnApproveApproval", async () => doApprovalAction("approve"));
+bind("btnSelectAllApprovalRows", selectAllApprovalRows);
+bind("btnFillBatchIds", fillBatchIdsFromCurrentFilter);
+bind("btnBatchApprove", async () => doBatchApprovalAction("approve"));
 bind("btnRejectApproval", async () => {
   const id = Number(document.getElementById("approvalOrderId").value.trim());
   if (!Number.isFinite(id) || id <= 0) throw new Error("请先在审批列表中点击一条单据。");
@@ -2576,6 +4435,7 @@ bind("btnRejectApproval", async () => {
   }
 });
 bind("btnConfirmRejectInput", async () => doApprovalAction("reject"));
+bind("btnBatchReject", async () => doBatchApprovalAction("reject"));
 bind("btnCancelRejectInput", async () => {
   setRejectInputVisible(false);
   const commentInput = document.getElementById("approvalComment");
@@ -2583,6 +4443,7 @@ bind("btnCancelRejectInput", async () => {
 });
 bind("btnVoidApproval", async () => doApprovalAction("void"));
 bind("btnReverseApproval", async () => doApprovalAction("reverse"));
+bind("btnJumpAbnormal", jumpToAbnormalReason);
 bind("btnCopyApprovalDetailCurl", async () => copyApprovalDetailCurl());
 bind("btnBizPurchase", async () => {
   setActivePanel("panelCreate");
@@ -2656,14 +4517,42 @@ bind("btnConfirmPurchase", createPurchase);
 bind("btnConfirmSales", createSales);
 bind("btnConfirmReceipt", createReceipt);
 bind("btnConfirmPayment", createPayment);
-bind("btnAr", queryAr);
-bind("btnAp", queryAp);
+bind("btnRcAmountFull", () => applyAmountShortcut("receipt", 1));
+bind("btnRcAmountHalf", () => applyAmountShortcut("receipt", 0.5));
+bind("btnRcAmountClear", () => applyAmountShortcut("receipt", 0));
+bind("btnPyAmountFull", () => applyAmountShortcut("payment", 1));
+bind("btnPyAmountHalf", () => applyAmountShortcut("payment", 0.5));
+bind("btnPyAmountClear", () => applyAmountShortcut("payment", 0));
+bind("btnWarehouseCreate", createWarehouseFromForm);
+bind("btnLocationCreate", createLocationFromForm);
+bind("btnCreateReceiptFlow", createPurchaseReceiptFlow);
+bind("btnCreateDeliveryFlow", createSalesDeliveryFlow);
+bind("btnCreatePurchaseReturnFlow", createPurchaseReturnFlow);
+bind("btnCreateSalesReturnFlow", createSalesReturnFlow);
+bind("btnAr", async () => {
+  serverPager.ar.page = 1;
+  await queryAr();
+});
+bind("btnAp", async () => {
+  serverPager.ap.page = 1;
+  await queryAp();
+});
 bind("btnJournals", queryJournals);
 bind("btnTrend", queryTrend);
 bind("btnAudit", queryAudit);
 bind("btnAlerts", queryAlerts);
 bind("btnRefreshAll", refreshAll);
 bind("btnRunAll", runAll);
+trendDays?.addEventListener("change", () => {
+  void queryTrend();
+});
+trendViewMode?.addEventListener("change", () => {
+  if (cache.trend.length) {
+    renderTrendFromCache();
+    return;
+  }
+  void queryTrend();
+});
 
 
 filters.products.addEventListener("input", () => cache.products.length && rerenderFromCache("products"));
@@ -2671,6 +4560,13 @@ filters.ar.addEventListener("input", () => cache.ar.length && rerenderFromCache(
 filters.ap.addEventListener("input", () => cache.ap.length && rerenderFromCache("ap"));
 filters.journals.addEventListener("input", () => cache.journals.length && rerenderFromCache("journals"));
 filters.audit.addEventListener("input", () => cache.audit.length && rerenderFromCache("audit"));
+
+document.getElementById("filterRemindReceipts")?.addEventListener("input", () => {
+  renderRemindersTable("remindReceiptsTable", reminderCache.receipts, "催收货列表");
+});
+document.getElementById("filterRemindDeliveries")?.addEventListener("input", () => {
+  renderRemindersTable("remindDeliveriesTable", reminderCache.deliveries, "催发货列表");
+});
 
 bind("btnExportProducts", async () => {
   ensureToken();
@@ -2692,6 +4588,7 @@ bind("btnExportAr", async () => {
     { label: "ID", getter: (r) => r.id },
     { label: "发票号", getter: (r) => r.invoiceNo },
     { label: "客户", getter: (r) => r.customerName },
+    { label: "阶段", getter: (r) => stageLabelFromKey(arStageKeyFromRow(r), "sales") },
     { label: "总金额", getter: (r) => r.totalAmount },
     { label: "已收金额", getter: (r) => r.receivedAmount },
     { label: "状态", getter: (r) => zhArApStatus(r.status) },
@@ -2705,6 +4602,7 @@ bind("btnExportAp", async () => {
     { label: "ID", getter: (r) => r.id },
     { label: "账单号", getter: (r) => r.billNo },
     { label: "供应商", getter: (r) => r.supplierName },
+    { label: "阶段", getter: (r) => stageLabelFromKey(apStageKeyFromRow(r), "purchase") },
     { label: "总金额", getter: (r) => r.totalAmount },
     { label: "已付金额", getter: (r) => r.paidAmount },
     { label: "状态", getter: (r) => zhArApStatus(r.status) },
@@ -2760,6 +4658,67 @@ bind("btnExportAlerts", async () => {
   ]);
 });
 
+bind("btnDataChecks", runDataChecks);
+bind("btnRemindReceipts", async () => {
+  serverPager.remindReceipts.page = 1;
+  await loadRemindReceipts();
+});
+bind("btnRemindDeliveries", async () => {
+  serverPager.remindDeliveries.page = 1;
+  await loadRemindDeliveries();
+});
+bind("btnRemindReceiptsPrev", async () => {
+  serverPager.remindReceipts.page = Math.max(1, serverPager.remindReceipts.page - 1);
+  await loadRemindReceipts();
+});
+bind("btnRemindReceiptsNext", async () => {
+  serverPager.remindReceipts.page += 1;
+  await loadRemindReceipts();
+});
+bind("btnRemindDeliveriesPrev", async () => {
+  serverPager.remindDeliveries.page = Math.max(1, serverPager.remindDeliveries.page - 1);
+  await loadRemindDeliveries();
+});
+bind("btnRemindDeliveriesNext", async () => {
+  serverPager.remindDeliveries.page += 1;
+  await loadRemindDeliveries();
+});
+bind("btnRemindReceiptsJump", async () => {
+  const v = Number(document.getElementById("remindReceiptsPageJump")?.value || 0);
+  if (v > 0) serverPager.remindReceipts.page = v;
+  await loadRemindReceipts();
+});
+bind("btnRemindDeliveriesJump", async () => {
+  const v = Number(document.getElementById("remindDeliveriesPageJump")?.value || 0);
+  if (v > 0) serverPager.remindDeliveries.page = v;
+  await loadRemindDeliveries();
+});
+document.getElementById("remindReceiptsPageSize")?.addEventListener("change", async (e) => {
+  serverPager.remindReceipts.pageSize = Number(e.target.value || 10);
+  serverPager.remindReceipts.page = 1;
+  savePagerPrefs();
+  await loadRemindReceipts();
+});
+document.getElementById("remindDeliveriesPageSize")?.addEventListener("change", async (e) => {
+  serverPager.remindDeliveries.pageSize = Number(e.target.value || 10);
+  serverPager.remindDeliveries.page = 1;
+  savePagerPrefs();
+  await loadRemindDeliveries();
+});
+bind("btnSaveReminderPref", () => {
+  const prefs = {
+    warnDays: Number(document.getElementById("remindWarnDays")?.value || 2),
+    dangerDays: Number(document.getElementById("remindDangerDays")?.value || 7)
+  };
+  if (prefs.dangerDays < prefs.warnDays) {
+    showActionWarn("高危天数不能小于预警天数。");
+    return;
+  }
+  saveReminderPrefs(prefs);
+  if (reminderCache.receipts.length) renderRemindersTable("remindReceiptsTable", reminderCache.receipts || [], "催收货列表");
+  if (reminderCache.deliveries.length) renderRemindersTable("remindDeliveriesTable", reminderCache.deliveries || [], "催发货列表");
+  showActionOk(`提醒规则已保存：黄灯 ${prefs.warnDays} 天，红灯 ${prefs.dangerDays} 天。`);
+});
 bind("btnClearLogs", async () => {
   output.textContent = "";
 });
@@ -2768,6 +4727,45 @@ document.getElementById("approvalStatusFilter")?.addEventListener("change", () =
 });
 document.getElementById("chkApprovalActionableOnly")?.addEventListener("change", () => {
   renderApprovalTableFromCache();
+});
+document.getElementById("approvalStageFilter")?.addEventListener("change", () => {
+  renderApprovalTableFromCache();
+});
+document.getElementById("approvalSort")?.addEventListener("change", () => {
+  renderApprovalTableFromCache();
+});
+document.getElementById("approvalSearch")?.addEventListener("input", () => {
+  renderApprovalTableFromCache();
+});
+document.getElementById("arStageFilter")?.addEventListener("change", () => {
+  renderArFromCache();
+});
+document.getElementById("arSort")?.addEventListener("change", () => {
+  renderArFromCache();
+});
+document.getElementById("apStageFilter")?.addEventListener("change", () => {
+  renderApFromCache();
+});
+document.getElementById("apSort")?.addEventListener("change", () => {
+  renderApFromCache();
+});
+document.getElementById("sortRemindReceipts")?.addEventListener("change", () => {
+  renderRemindersTable("remindReceiptsTable", reminderCache.receipts || [], "催收货列表");
+});
+document.getElementById("sortRemindDeliveries")?.addEventListener("change", () => {
+  renderRemindersTable("remindDeliveriesTable", reminderCache.deliveries || [], "催发货列表");
+});
+document.getElementById("remindWarnDays")?.addEventListener("input", () => {
+  const preset = document.getElementById("remindRulePreset");
+  if (preset) preset.value = "custom";
+  if (reminderCache.receipts.length) renderRemindersTable("remindReceiptsTable", reminderCache.receipts || [], "催收货列表");
+  if (reminderCache.deliveries.length) renderRemindersTable("remindDeliveriesTable", reminderCache.deliveries || [], "催发货列表");
+});
+document.getElementById("remindDangerDays")?.addEventListener("input", () => {
+  const preset = document.getElementById("remindRulePreset");
+  if (preset) preset.value = "custom";
+  if (reminderCache.receipts.length) renderRemindersTable("remindReceiptsTable", reminderCache.receipts || [], "催收货列表");
+  if (reminderCache.deliveries.length) renderRemindersTable("remindDeliveriesTable", reminderCache.deliveries || [], "催发货列表");
 });
 document.getElementById("poSupplierPick")?.addEventListener("change", (e) => {
   if (handleQuickAddSelect("poSupplierPick", "supplier", "boxQuickAddSupplier", "inputQuickAddSupplierName")) return;
@@ -2790,6 +4788,7 @@ document.getElementById("pySupplierPick")?.addEventListener("change", (e) => {
   if (v > 0) state.supplierId = v;
   e.target.dataset.prevValue = v > 0 ? String(v) : "";
   updateSelectVisualState("pySupplierPick");
+  renderSettlementPicksFromCache();
   renderPaymentPreviewHint();
   hidePickOptionHint();
 });
@@ -2814,6 +4813,7 @@ document.getElementById("rcCustomerPick")?.addEventListener("change", (e) => {
   if (v > 0) state.customerId = v;
   e.target.dataset.prevValue = v > 0 ? String(v) : "";
   updateSelectVisualState("rcCustomerPick");
+  renderSettlementPicksFromCache();
   renderReceiptPreviewHint();
   hidePickOptionHint();
 });
@@ -2852,6 +4852,27 @@ document.getElementById("soPrice")?.addEventListener("input", () => {
 document.getElementById("rcArPick")?.addEventListener("change", (e) => {
   const v = Number(e.target.value || 0);
   document.getElementById("rcArInvoiceId").value = v > 0 ? String(v) : "";
+  if (v > 0) {
+    const row = (settlementPickCache.ar || []).find((x) => Number(x.id || 0) === v);
+    const open = row ? Math.max(0, Number(row.totalAmount || 0) - Number(row.receivedAmount || 0)) : 0;
+    const amountInput = document.getElementById("rcAmount");
+    if (amountInput && (!String(amountInput.value || "").trim() || Number(amountInput.value || 0) <= 0)) {
+      amountInput.value = open > 0 ? open.toFixed(2) : "";
+    }
+  }
+  if (v > 0) {
+    const selected = e.target.selectedOptions?.[0];
+    const cid = Number(selected?.dataset?.customerId || 0);
+    if (cid > 0) {
+      const customerPick = document.getElementById("rcCustomerPick");
+      if (customerPick) {
+        customerPick.value = String(cid);
+        customerPick.dataset.prevValue = String(cid);
+      }
+      state.customerId = cid;
+      updateSelectVisualState("rcCustomerPick");
+    }
+  }
   updateSelectVisualState("rcArPick");
   renderReceiptPreviewHint();
   hidePickOptionHint();
@@ -2865,6 +4886,27 @@ document.getElementById("rcArPick")?.addEventListener("click", () => {
 document.getElementById("pyApPick")?.addEventListener("change", (e) => {
   const v = Number(e.target.value || 0);
   document.getElementById("pyApBillId").value = v > 0 ? String(v) : "";
+  if (v > 0) {
+    const row = (settlementPickCache.ap || []).find((x) => Number(x.id || 0) === v);
+    const open = row ? Math.max(0, Number(row.totalAmount || 0) - Number(row.paidAmount || 0)) : 0;
+    const amountInput = document.getElementById("pyAmount");
+    if (amountInput && (!String(amountInput.value || "").trim() || Number(amountInput.value || 0) <= 0)) {
+      amountInput.value = open > 0 ? open.toFixed(2) : "";
+    }
+  }
+  if (v > 0) {
+    const selected = e.target.selectedOptions?.[0];
+    const sid = Number(selected?.dataset?.supplierId || 0);
+    if (sid > 0) {
+      const supplierPick = document.getElementById("pySupplierPick");
+      if (supplierPick) {
+        supplierPick.value = String(sid);
+        supplierPick.dataset.prevValue = String(sid);
+      }
+      state.supplierId = sid;
+      updateSelectVisualState("pySupplierPick");
+    }
+  }
   updateSelectVisualState("pyApPick");
   renderPaymentPreviewHint();
   hidePickOptionHint();
@@ -2881,6 +4923,133 @@ document.getElementById("pyApPick")?.addEventListener("focus", () => {
 document.getElementById("pyApPick")?.addEventListener("click", () => {
   void ensureAndShowPickOptions("pyApPick", "应付单据", refreshSettlementPicks, "暂无可选项，请先审批通过采购单。");
 });
+document.getElementById("execPurchaseWarehousePick")?.addEventListener("change", async (e) => {
+  const warehouseId = Number(e.target.value || 0);
+  try {
+    const rows = warehouseId > 0 ? await api(`/api/locations?warehouseId=${warehouseId}`) : await api("/api/locations");
+    const locationPick = document.getElementById("execPurchaseLocationPick");
+    if (locationPick) {
+      const opts = ['<option value="">库位（可选）</option>'];
+      (rows || []).forEach((l) => opts.push(`<option value="${l.id}">${l.code} ${l.name}</option>`));
+      locationPick.innerHTML = opts.join("");
+    }
+  } catch (_e) {
+    // ignore by permission
+  }
+});
+document.getElementById("execSalesWarehousePick")?.addEventListener("change", async (e) => {
+  const warehouseId = Number(e.target.value || 0);
+  try {
+    const rows = warehouseId > 0 ? await api(`/api/locations?warehouseId=${warehouseId}`) : await api("/api/locations");
+    const locationPick = document.getElementById("execSalesLocationPick");
+    if (locationPick) {
+      const opts = ['<option value="">库位（可选）</option>'];
+      (rows || []).forEach((l) => opts.push(`<option value="${l.id}">${l.code} ${l.name}</option>`));
+      locationPick.innerHTML = opts.join("");
+    }
+  } catch (_e) {
+    // ignore by permission
+  }
+});
+document.getElementById("execPurchaseOrderPick")?.addEventListener("change", async (e) => {
+  const orderId = Number(e.target.value || 0);
+  const batchInput = document.getElementById("execPurchaseBatchNo");
+  const qtyInput = document.getElementById("execPurchaseQty");
+  if (batchInput) batchInput.value = "";
+  if (qtyInput) qtyInput.value = "";
+  if (!orderId) return;
+  try {
+    await applyExecutionOrderSelection("purchase", orderId);
+    await validateExecutionQty("purchase");
+  } catch (err) {
+    const msg = err?.message || String(err);
+    showActionWarn(msg);
+    showActionToast("error", msg);
+  }
+});
+document.getElementById("execSalesOrderPick")?.addEventListener("change", async (e) => {
+  const orderId = Number(e.target.value || 0);
+  const batchInput = document.getElementById("execSalesBatchNo");
+  const qtyInput = document.getElementById("execSalesQty");
+  if (batchInput) batchInput.value = "";
+  if (qtyInput) qtyInput.value = "";
+  if (!orderId) return;
+  try {
+    await applyExecutionOrderSelection("sales", orderId);
+    await validateExecutionQty("sales");
+  } catch (err) {
+    const msg = err?.message || String(err);
+    showActionWarn(msg);
+    showActionToast("error", msg);
+  }
+});
+
+document.getElementById("execPurchaseProductPick")?.addEventListener("change", () => {
+  const orderId = Number(inputNum("execPurchaseOrderId") || 0);
+  const productId = Number(selectNum("execPurchaseProductPick") || 0);
+  const batchInput = document.getElementById("execPurchaseBatchNo");
+  const qtyInput = document.getElementById("execPurchaseQty");
+  if (qtyInput) qtyInput.value = "";
+  if (batchInput && !String(batchInput.value || "").trim()) {
+    batchInput.value = getNextBatchNo({ orderType: "purchase", orderId, productId });
+  }
+  void validateExecutionQty("purchase");
+});
+
+document.getElementById("execSalesProductPick")?.addEventListener("change", () => {
+  const orderId = Number(inputNum("execSalesOrderId") || 0);
+  const productId = Number(selectNum("execSalesProductPick") || 0);
+  const batchInput = document.getElementById("execSalesBatchNo");
+  const qtyInput = document.getElementById("execSalesQty");
+  if (qtyInput) qtyInput.value = "";
+  if (batchInput && !String(batchInput.value || "").trim()) {
+    batchInput.value = getNextBatchNo({ orderType: "sales", orderId, productId });
+  }
+  void validateExecutionQty("sales");
+});
+document.getElementById("execPurchaseQty")?.addEventListener("input", () => {
+  void validateExecutionQty("purchase");
+});
+document.getElementById("execSalesQty")?.addEventListener("input", () => {
+  void validateExecutionQty("sales");
+});
+
+// 仓库/库位管理：聚焦输入框时提示已有项，避免重复创建
+["newWarehouseCode", "newWarehouseName"].forEach((id) => {
+  document.getElementById(id)?.addEventListener("focus", () => {
+    const el = document.getElementById(id);
+    showExistingWarehousesDropdown(el).catch(() => {});
+  });
+  document.getElementById(id)?.addEventListener("click", () => {
+    const el = document.getElementById(id);
+    showExistingWarehousesDropdown(el).catch(() => {});
+  });
+});
+["newLocationCode", "newLocationName", "newLocationWarehousePick"].forEach((id) => {
+  document.getElementById(id)?.addEventListener("focus", () => {
+    const el = document.getElementById(id);
+    showExistingLocationsDropdown(el).catch(() => {});
+  });
+  document.getElementById(id)?.addEventListener("click", () => {
+    const el = document.getElementById(id);
+    showExistingLocationsDropdown(el).catch(() => {});
+  });
+});
+document.getElementById("newLocationWarehousePick")?.addEventListener("change", () => {
+  const el = document.getElementById("newLocationWarehousePick");
+  showExistingLocationsDropdown(el).catch(() => {});
+});
+
+// 点击空白处收起下拉提示
+document.addEventListener("click", (e) => {
+  if (!whSuggestBox && !locSuggestBox) return;
+  const target = e.target;
+  const ids = new Set(["newWarehouseCode", "newWarehouseName", "newLocationWarehousePick", "newLocationCode", "newLocationName"]);
+  const isInput = target && target.id && ids.has(target.id);
+  const inWh = whSuggestBox ? whSuggestBox.contains(target) : false;
+  const inLoc = locSuggestBox ? locSuggestBox.contains(target) : false;
+  if (!isInput && !inWh && !inLoc) hideWhLocSuggest();
+});
 
 tabButtons.forEach((btn) => {
   btn.addEventListener("click", () => setActivePanel(btn.dataset.panel));
@@ -2891,6 +5060,57 @@ moduleNavButtons.forEach((btn) => {
     if (btn.dataset.panel === "panelApproval") await loadRoleApprovalWorkspace();
   });
 });
+
+document.addEventListener("keydown", (e) => {
+  const activeTag = String(document.activeElement?.tagName || "").toLowerCase();
+  if (activeTag === "input" || activeTag === "textarea" || activeTag === "select") return;
+  if (!e.altKey) return;
+  if (e.key === "a" || e.key === "A") {
+    e.preventDefault();
+    void doApprovalAction("approve").catch(() => {});
+  } else if (e.key === "r" || e.key === "R") {
+    e.preventDefault();
+    const id = Number(document.getElementById("approvalOrderId")?.value || 0);
+    if (id > 0) {
+      setRejectInputVisible(true);
+      const commentInput = document.getElementById("approvalComment");
+      if (commentInput) commentInput.focus();
+    }
+  } else if (e.key === "s" || e.key === "S") {
+    e.preventDefault();
+    void doApprovalAction("submit").catch(() => {});
+  }
+});
+
+const reminderPrefs = loadReminderPrefs();
+const remindWarnInput = document.getElementById("remindWarnDays");
+const remindDangerInput = document.getElementById("remindDangerDays");
+if (remindWarnInput) remindWarnInput.value = String(reminderPrefs.warnDays);
+if (remindDangerInput) remindDangerInput.value = String(reminderPrefs.dangerDays);
+const remindPresetPick = document.getElementById("remindRulePreset");
+if (remindPresetPick) {
+  const key = `${Number(reminderPrefs.warnDays || 0)},${Number(reminderPrefs.dangerDays || 0)}`;
+  const known = new Set(["2,7", "1,3", "3,7", "5,10"]);
+  remindPresetPick.value = known.has(key) ? key : "custom";
+  remindPresetPick.addEventListener("change", () => {
+    const v = String(remindPresetPick.value || "");
+    if (v === "custom") return;
+    const parts = v.split(",").map((x) => Number(x));
+    const warn = Number(parts[0] || 0);
+    const danger = Number(parts[1] || 0);
+    if (remindWarnInput) remindWarnInput.value = warn > 0 ? String(warn) : "";
+    if (remindDangerInput) remindDangerInput.value = danger > 0 ? String(danger) : "";
+    if (reminderCache.receipts.length) renderRemindersTable("remindReceiptsTable", reminderCache.receipts || [], "催收货列表");
+    if (reminderCache.deliveries.length) renderRemindersTable("remindDeliveriesTable", reminderCache.deliveries || [], "催发货列表");
+  });
+}
+const pagerPrefs = loadPagerPrefs();
+approvalPager.pageSize = pagerPrefs.approvalPageSize;
+serverPager.ar.pageSize = pagerPrefs.arPageSize;
+serverPager.ap.pageSize = pagerPrefs.apPageSize;
+serverPager.remindReceipts.pageSize = pagerPrefs.remindReceiptsPageSize;
+serverPager.remindDeliveries.pageSize = pagerPrefs.remindDeliveriesPageSize;
+initServerPagerUiDefaults();
 
 if (restoreSession()) {
   setAuthenticatedUi(true);
