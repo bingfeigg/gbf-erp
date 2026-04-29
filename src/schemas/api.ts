@@ -137,3 +137,10 @@ export const configWebhookEndpointSchema = z.object({
   secret: z.string().min(1).optional(),
   enabled: z.boolean().default(true)
 });
+
+export const configArInvoiceNoRuleSchema = z.object({
+  source: z.enum(["order_no", "sequence"]).default("order_no"),
+  prefix: z.string().min(1).max(20).default("AR-"),
+  dateSegment: z.enum(["none", "yyyymm", "yyyymmdd"]).default("none"),
+  sequenceDigits: z.number().int().min(1).max(12).default(4)
+});

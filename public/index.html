@@ -190,37 +190,57 @@
       .mt-10 { margin-top: 10px !important; }
       .exec-row {
         display: grid;
-        grid-template-columns:
-          minmax(180px, 2.2fr)
-          minmax(110px, 0.9fr)
-          minmax(160px, 1.6fr)
-          minmax(90px, 0.8fr)
-          minmax(130px, 1.1fr)
-          minmax(130px, 1.1fr)
-          minmax(140px, 1.2fr)
-          minmax(220px, 260px);
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
         gap: 8px;
         align-items: end;
         width: 100%;
         min-width: 0;
+        max-width: 100%;
       }
       .row.exec-row { margin-bottom: 0; }
       .exec-row > * { min-width: 0; width: 100%; }
       .exec-row input, .exec-row select { width: 100%; max-width: none !important; }
+      .exec-row select { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .exec-row input { min-width: 0; }
       .exec-actions {
         display: flex;
         gap: 8px;
-        justify-content: flex-end;
+        justify-content: flex-start;
         align-items: center;
         width: 100%;
-        flex-wrap: nowrap;
-        height: 36px;
+        flex-wrap: wrap;
+        min-height: 36px;
       }
       .exec-actions button {
+        flex: 0 0 auto;
         width: auto;
-        min-width: 102px;
+        min-width: 6ch;
         height: 36px;
         white-space: nowrap;
+      }
+      /* 宽屏：采购/销售执行保持单行（不换行） */
+      @media (min-width: 1200px) {
+        .exec-row {
+          grid-template-columns:
+            minmax(160px, 2.2fr)  /* 订单下拉（可压缩） */
+            110px                 /* 订单ID（固定窄列） */
+            minmax(140px, 1.8fr)  /* 商品下拉（可压缩） */
+            96px                  /* 数量（固定窄列） */
+            minmax(120px, 1.25fr) /* 仓库（可压缩） */
+            minmax(120px, 1.25fr) /* 库位（可压缩） */
+            minmax(140px, 1.35fr) /* 批次号（可压缩） */
+            max-content;          /* 操作按钮 */
+        }
+        .exec-actions {
+          justify-content: flex-end;
+          flex-wrap: nowrap;
+          width: 100%;
+          gap: 6px;
+        }
+        .exec-actions button {
+          min-width: 86px;
+          padding: 8px 10px;
+        }
       }
       input, button {
         padding: 8px 10px;
@@ -310,6 +330,10 @@
         font-size: 13px;
         max-height: 280px;
         overflow: auto;
+        padding: 8px 10px;
+        border: 1px solid rgba(255,255,255,.10);
+        border-radius: 8px;
+        background: rgba(255,255,255,.03);
       }
       .approval-detail-panel { display: grid; gap: 6px; }
       .approval-detail-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
@@ -450,6 +474,7 @@
       #panelApproval .approval-main-stack {
         display: grid;
         gap: 10px;
+        min-width: 0;
       }
       #panelApproval .approval-list-card {
         border: 1px solid rgba(255,255,255,.12);
@@ -466,7 +491,8 @@
         background: rgba(79, 140, 255, .08);
       }
       #panelApproval #approvalTable table {
-        table-layout: auto;
+        table-layout: fixed;
+        width: 100%;
       }
       #panelApproval #approvalTable thead th {
         position: sticky;
@@ -484,15 +510,17 @@
       #panelApproval #approvalTable td {
         white-space: nowrap;
         line-height: 1.25;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       #panelApproval #approvalTable th.th-status,
       #panelApproval #approvalTable td.td-status,
       #panelApproval #approvalTable th.th-stage,
       #panelApproval #approvalTable td.td-stage {
-        min-width: 78px;
+        width: 92px;
       }
       #panelApproval #approvalTable th.th-amount {
-        min-width: 84px;
+        width: 96px;
       }
       #panelApproval #approvalTable th.th-time,
       #panelApproval #approvalTable td.td-time {
@@ -584,12 +612,98 @@
         padding: 8px 10px;
         justify-self: end;
       }
-      #bizParamGrid .ops-field.field-wide { flex: 2 1 170px; min-width: 150px; }
-      #bizParamGrid .ops-field.field-mid { flex: 1.2 1 120px; min-width: 104px; }
-      #bizParamGrid .ops-field.field-narrow { flex: 0.8 1 82px; min-width: 72px; }
-      #bizParamGrid .ops-field.ops-field-action { flex: 0 0 72px; }
+      #bizParamGrid .ops-field.field-wide { flex: 2 1 170px; min-width: 0; }
+      #bizParamGrid .ops-field.field-mid { flex: 1.2 1 120px; min-width: 0; }
+      #bizParamGrid .ops-field.field-narrow { flex: 0.8 1 82px; min-width: 0; }
+      #bizParamGrid .ops-field.ops-field-action { flex: 0 0 72px; min-width: 0; }
       #bizParamGrid .ops-fields {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        --biz-col-main: 240px;
+        --biz-col-mid: 240px;
+        --biz-col-small: 108px;
+        --biz-gap: 6px;
+        grid-template-columns:
+          var(--biz-col-main)
+          var(--biz-col-mid)
+          var(--biz-col-mid)
+          var(--biz-col-small)
+          var(--biz-col-small)
+          auto;
+        column-gap: var(--biz-gap);
+        row-gap: var(--biz-gap);
+        align-items: end;
+      }
+      /* 单号输入框强制同宽（不依赖栅格比例） */
+      #poOrderNo,
+      #soOrderNo,
+      #rcNo,
+      #pyNo {
+        width: var(--biz-col-main) !important;
+        min-width: var(--biz-col-main) !important;
+        max-width: var(--biz-col-main) !important;
+      }
+      /* 第二列：客户/供应商；第三列：商品/单据，强制同宽 */
+      #poSupplierPick,
+      #soCustomerPick,
+      #rcCustomerPick,
+      #pySupplierPick,
+      #poProductPick,
+      #soProductPick,
+      #rcArPick,
+      #pyApPick {
+        width: var(--biz-col-mid) !important;
+        min-width: var(--biz-col-mid) !important;
+        max-width: var(--biz-col-mid) !important;
+      }
+      /* 第四/五列统一小宽度：数量/金额/单价 */
+      #rcAmount,
+      #pyAmount {
+        width: var(--biz-col-small) !important;
+        min-width: var(--biz-col-small) !important;
+        max-width: var(--biz-col-small) !important;
+      }
+      /* 前三列强制对齐：单号 / 客户供应商 / 商品单据 */
+      #bizParamGrid .ops-field.align-col-1 {
+        grid-column: 1 !important;
+        width: var(--biz-col-main);
+        min-width: var(--biz-col-main);
+        max-width: var(--biz-col-main);
+        justify-self: start;
+      }
+      #bizParamGrid .ops-field.align-col-2 {
+        grid-column: 2 !important;
+        width: var(--biz-col-mid);
+        min-width: var(--biz-col-mid);
+        max-width: var(--biz-col-mid);
+        justify-self: start;
+      }
+      #bizParamGrid .ops-field.align-col-3 {
+        grid-column: 3 !important;
+        width: var(--biz-col-mid);
+        min-width: var(--biz-col-mid);
+        max-width: var(--biz-col-mid);
+        justify-self: start;
+      }
+      #bizParamGrid .ops-field.align-col-1 > select,
+      #bizParamGrid .ops-field.align-col-1 > input,
+      #bizParamGrid .ops-field.align-col-3 > select,
+      #bizParamGrid .ops-field.align-col-3 > input {
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: none !important;
+      }
+      #bizParamGrid .ops-field.align-col-4 { grid-column: 4 !important; }
+      #bizParamGrid .ops-field.align-col-5 {
+        grid-column: 5 !important;
+        margin-left: 0;
+      }
+      #bizParamGrid .ops-field.align-col-45 {
+        grid-column: 4 / span 2 !important;
+      }
+      #bizParamGrid .ops-field.align-col-2 > select,
+      #bizParamGrid .ops-field.align-col-2 > input {
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: none !important;
       }
       .ops-param-card {
         border: 1px solid rgba(255,255,255,.1);
@@ -625,7 +739,7 @@
       .param-card-fold .ops-fields { margin-top: 6px; }
       .ops-fields {
         display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
         gap: 6px;
       }
       .ops-field {
@@ -640,6 +754,15 @@
       .ops-field input {
         min-width: 0;
         width: 100%;
+      }
+      /* 数量/单价在参数栅格里随列宽压缩，避免出现“中间空一截”的视觉断层 */
+      #bizParamGrid #poQty,
+      #bizParamGrid #poPrice,
+      #bizParamGrid #soQty,
+      #bizParamGrid #soPrice {
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: none !important;
       }
       .ops-field select {
         min-width: 0;
@@ -765,12 +888,16 @@
         gap: 8px;
         max-width: none;
         margin: 0;
+        min-width: 0;
+        overflow-x: clip;
       }
       #panelCreate.panel.active {
         display: grid;
       }
       #panelCreate > .card {
         width: 100%;
+        max-width: 100%;
+        min-width: 0;
       }
       #panelCreate .row {
         flex-wrap: wrap;
@@ -783,9 +910,78 @@
       #panelCreate .row > button {
         flex: 0 0 auto;
       }
+      #panelCreate .create-form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 8px;
+        align-items: end;
+      }
+      #panelCreate .create-form-grid > * {
+        min-width: 0;
+        width: 100%;
+        max-width: none !important;
+      }
+      #panelCreate .create-form-grid > button {
+        min-height: 36px;
+        width: auto;
+        min-width: 6ch;
+        justify-self: end;
+      }
+      #panelCreate .ops-field.ops-field-action button {
+        width: auto;
+        min-width: 6ch;
+        justify-self: end;
+      }
+      #panelCreate .row > button {
+        min-width: 120px;
+      }
+      #panelCreate .ops-field.ops-field-action {
+        display: flex;
+        align-items: end;
+        justify-content: flex-end;
+        grid-column: 6;
+      }
       #panelCreate .card .row > input[style],
       #panelCreate .card .row > select[style] {
         max-width: none !important;
+      }
+      #panelCreate #bizParamsWorkbench,
+      #panelCreate #userOpsSection,
+      #panelCreate #bizParamsGroup,
+      #panelCreate #bizParamGrid,
+      #panelCreate .ops-param-card,
+      #panelCreate .param-card-fold,
+      #panelCreate .ops-fields,
+      #panelCreate .ops-field {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+      }
+      #fieldPoOrderNo,
+      #fieldSoOrderNo,
+      #fieldRcNo,
+      #fieldPyNo {
+        grid-column: 1;
+      }
+      /* 单号列固定为同一网格列，确保收款单号与销售单号等宽 */
+      #poOrderNo,
+      #soOrderNo,
+      #rcNo,
+      #pyNo {
+        width: 100%;
+      }
+      #poOrderNo,
+      #soOrderNo,
+      #rcNo,
+      #pyNo {
+        max-width: none;
+      }
+      /* 明确每块单号字段都在第1列 */
+      #poOrderNo,
+      #soOrderNo,
+      #rcNo,
+      #pyNo {
+        justify-self: stretch;
       }
       .ops-checkrow {
         display: flex;
@@ -886,8 +1082,8 @@
         min-width: 58px;
       }
       th.th-orderno, td.td-orderno {
-        min-width: 240px;
-        max-width: 280px;
+        width: 210px;
+        max-width: 210px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -897,7 +1093,7 @@
         font-variant-numeric: tabular-nums;
       }
       th.th-time, td.td-time {
-        min-width: 156px;
+        width: 168px;
         white-space: nowrap;
         font-variant-numeric: tabular-nums;
       }
@@ -962,6 +1158,27 @@
         grid-template-columns: 1fr 1fr;
         gap: 10px;
       }
+      .reminder-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 6px;
+      }
+      .reminder-title {
+        font-size: 12px;
+        font-weight: 700;
+        color: #dbe7ff;
+      }
+      .reminder-tools {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .reminder-tools > input { max-width: 220px; }
+      .reminder-tools > select { max-width: 170px; }
       @media (max-width: 1100px) {
         .reminder-grid { grid-template-columns: 1fr; }
       }
@@ -982,6 +1199,9 @@
       #panelApproval .split-side .drawer {
         margin-top: 0;
         padding: 6px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
       }
       #panelApproval #approvalTimeline {
         max-height: 190px;
@@ -989,6 +1209,75 @@
       }
       @media (max-width: 1200px) {
         #panelApproval .split-side { grid-template-columns: 1fr; }
+      }
+      /* 宽屏：审批工作台使用“主列表 + 侧栏”两列，信息密度更高 */
+      @media (min-width: 1200px) {
+        #panelApproval .split {
+          grid-template-columns: minmax(0, 1.55fr) minmax(360px, 1fr);
+          gap: 12px;
+          grid-template-areas: "main side";
+          min-width: 0;
+        }
+        #panelApproval .split-side {
+          grid-area: side;
+          position: sticky;
+          top: 12px;
+          grid-template-columns: 1fr;
+          max-height: calc(100vh - 24px);
+          overflow: auto;
+          overscroll-behavior: contain;
+        }
+        #panelApproval .split-side .drawer {
+          padding: 8px;
+        }
+        #panelApproval .approval-main-stack {
+          grid-area: main;
+        }
+      }
+
+      /* 审批工具条：筛选/批量区域对齐更稳定 */
+      #panelApproval .approval-filter-row,
+      #panelApproval .approval-batch-row {
+        flex-wrap: wrap;
+      }
+      @media (min-width: 1200px) {
+        #panelApproval .approval-filter-row,
+        #panelApproval .approval-batch-row {
+          display: grid;
+          grid-template-columns:
+            64px
+            minmax(240px, 1.6fr)
+            minmax(150px, 0.9fr)
+            minmax(150px, 0.9fr)
+            minmax(140px, 0.8fr)
+            max-content;
+          gap: 8px;
+          align-items: center;
+        }
+        #panelApproval .approval-filter-row .row-title,
+        #panelApproval .approval-batch-row .row-title {
+          margin-bottom: 0;
+        }
+        #panelApproval .approval-filter-row #approvalSearch {
+          max-width: none;
+          width: 100%;
+        }
+        #panelApproval .approval-filter-row label { justify-self: start; }
+        #panelApproval .approval-batch-row {
+          grid-template-columns:
+            64px
+            minmax(320px, 1.8fr)
+            max-content
+            max-content
+            max-content
+            max-content;
+          align-items: end;
+        }
+        #panelApproval .approval-batch-row #approvalBatchIds {
+          max-width: none;
+          width: 100%;
+        }
+        #panelApproval .approval-batch-row button { min-width: 110px; }
       }
       .split-side {
         position: sticky;
@@ -1152,6 +1441,23 @@
         75% { transform: translate(calc(-50% - 2px), 0); }
         100% { transform: translate(-50%, 0); }
       }
+      .version-inline {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-left: 10px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,.16);
+        background: rgba(255,255,255,.06);
+        color: rgba(226, 232, 240, .9);
+        font-size: 12px;
+        line-height: 1.35;
+        font-variant-numeric: tabular-nums;
+        vertical-align: middle;
+        user-select: none;
+      }
+      .version-inline.hidden { display: none !important; }
       .trend {
         display: grid;
         gap: 10px;
@@ -1241,6 +1547,11 @@
         #bizParamGrid .ops-field.field-wide,
         #bizParamGrid .ops-field.field-mid { flex: 1 1 45%; min-width: 130px; }
         #bizParamGrid .ops-field.field-narrow { flex: 0 0 96px; min-width: 90px; }
+        #bizParamGrid .ops-fields {
+          --biz-col-main: 220px;
+          --biz-col-mid: 220px;
+          --biz-col-small: 104px;
+        }
       }
       @media (max-width: 760px) {
         .wrap { padding: 0 12px 12px; margin: 12px auto; }
@@ -1249,7 +1560,50 @@
         .row { gap: 6px; }
         .biz-action-buttons { grid-template-columns: 1fr; }
         .ops-fields { grid-template-columns: 1fr; }
-        #bizParamGrid .ops-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        #bizParamGrid .ops-fields { display: grid; grid-template-columns: 1fr; }
+        #poOrderNo,
+        #soOrderNo,
+        #rcNo,
+        #pyNo,
+        #poSupplierPick,
+        #soCustomerPick,
+        #rcCustomerPick,
+        #pySupplierPick,
+        #poProductPick,
+        #soProductPick,
+        #rcArPick,
+        #pyApPick,
+        #poQty,
+        #poPrice,
+        #soQty,
+        #soPrice,
+        #rcAmount,
+        #pyAmount {
+          width: 100% !important;
+          min-width: 0 !important;
+          max-width: none !important;
+          margin-left: 0 !important;
+        }
+        #bizParamGrid .ops-field.align-col-1,
+        #bizParamGrid .ops-field.align-col-2,
+        #bizParamGrid .ops-field.align-col-3,
+        #bizParamGrid .ops-field.align-col-4,
+        #bizParamGrid .ops-field.align-col-5 {
+          grid-column: auto;
+          margin-left: 0;
+          margin-right: 0;
+        }
+        #bizParamGrid .ops-field.align-col-45 { grid-column: auto; }
+        #panelCreate .create-form-grid { grid-template-columns: 1fr; }
+        #panelCreate .ops-field.ops-field-action {
+          justify-content: stretch;
+        }
+        #panelCreate .ops-field.ops-field-action button,
+        #panelCreate .create-form-grid > button,
+        .exec-actions button {
+          width: auto;
+          min-width: 6ch;
+        }
         .ops-checklabel { white-space: normal; }
         button, input, select { width: 100%; }
         #bizParamGrid .ops-field.field-wide,
@@ -1279,7 +1633,7 @@
     <div id="appShell" class="wrap hidden">
       <div class="hero">
         <div class="hero-head">
-          <h1>GBF ERP 智能控制台</h1>
+          <h1>GBF ERP 智能控制台<span id="appVersionInline" class="version-inline hidden" title="版本信息加载中">v-</span></h1>
           <button class="secondary" id="btnSwitchAccount">切换账号</button>
         </div>
         <p><small>贸易与财务一体化驾驶舱：实时看板、流程操作、凭证联动。</small></p>
@@ -1383,12 +1737,12 @@
                     <details class="param-card-fold">
                       <summary><div class="ops-param-title">采购单参数</div></summary>
                       <div class="ops-fields">
-                      <div class="ops-field field-wide"><label for="poOrderNo">采购单号</label><input id="poOrderNo" placeholder="PO..." /></div>
-                      <div class="ops-field field-wide"><label class="has-chip" for="poSupplierPick">供应商 <span id="chipPoSupplierPick" class="select-chip">已选</span></label><select id="poSupplierPick"><option value="">选择供应商</option></select><div id="boxQuickAddSupplier" class="row mt-6" style="display:none;gap:6px;"><input id="inputQuickAddSupplierCode" class="w-120" placeholder="编码（可选）" /><input id="inputQuickAddSupplierName" class="minw-140" placeholder="供应商名称" /><button type="button" id="btnConfirmQuickAddSupplier">确定</button><button type="button" class="secondary" id="btnCancelQuickAddSupplier">取消</button></div></div>
-                      <div class="ops-field field-wide"><label class="has-chip" for="poProductPick">商品 <span id="chipPoProductPick" class="select-chip">已选</span></label><select id="poProductPick"><option value="">选择商品</option></select></div>
+                      <div class="ops-field field-wide align-col-1" id="fieldPoOrderNo"><label for="poOrderNo">采购单号</label><input id="poOrderNo" placeholder="PO..." /></div>
+                      <div class="ops-field field-wide align-col-2"><label class="has-chip" for="poSupplierPick">供应商 <span id="chipPoSupplierPick" class="select-chip">已选</span></label><select id="poSupplierPick"><option value="">选择供应商</option></select><div id="boxQuickAddSupplier" class="row mt-6" style="display:none;gap:6px;"><input id="inputQuickAddSupplierCode" class="w-120" placeholder="编码（可选）" /><input id="inputQuickAddSupplierName" class="minw-140" placeholder="供应商名称" /><button type="button" id="btnConfirmQuickAddSupplier">确定</button><button type="button" class="secondary" id="btnCancelQuickAddSupplier">取消</button></div></div>
+                      <div class="ops-field field-wide align-col-3"><label class="has-chip" for="poProductPick">商品 <span id="chipPoProductPick" class="select-chip">已选</span></label><select id="poProductPick"><option value="">选择商品</option></select></div>
                       <input id="poProductId" type="hidden" />
-                      <div class="ops-field field-narrow"><label for="poQty">数量</label><input id="poQty" type="number" step="0.01" min="0.0001" placeholder="如 100" /></div>
-                      <div class="ops-field field-narrow"><label for="poPrice">单价</label><input id="poPrice" type="number" step="0.01" min="0" placeholder="如 10" /></div>
+                      <div class="ops-field field-narrow align-col-4"><label for="poQty">数量</label><input id="poQty" type="number" step="0.01" min="0.0001" placeholder="如 100" /></div>
+                      <div class="ops-field field-narrow align-col-5"><label for="poPrice">单价</label><input id="poPrice" type="number" step="0.01" min="0" placeholder="如 10" /></div>
                       <div class="ops-field ops-field-action"><label>操作</label><button id="btnConfirmPurchase">确定</button></div>
                       </div>
                       <div id="poAutoHint" class="muted" style="margin-top:6px;font-size:12px;"></div>
@@ -1399,12 +1753,12 @@
                     <details class="param-card-fold">
                       <summary><div class="ops-param-title">销售单参数</div></summary>
                       <div class="ops-fields">
-                      <div class="ops-field field-wide"><label for="soOrderNo">销售单号</label><input id="soOrderNo" placeholder="SO..." /></div>
-                      <div class="ops-field field-wide"><label class="has-chip" for="soCustomerPick">客户 <span id="chipSoCustomerPick" class="select-chip">已选</span></label><select id="soCustomerPick"><option value="">选择客户</option></select><div id="boxQuickAddCustomerSales" class="row mt-6" style="display:none;gap:6px;"><input id="inputQuickAddCustomerSalesCode" class="w-120" placeholder="编码（可选）" /><input id="inputQuickAddCustomerSalesName" class="minw-140" placeholder="客户名称" /><button type="button" id="btnConfirmQuickAddCustomerSales">确定</button><button type="button" class="secondary" id="btnCancelQuickAddCustomerSales">取消</button></div></div>
-                      <div class="ops-field field-wide"><label class="has-chip" for="soProductPick">商品 <span id="chipSoProductPick" class="select-chip">已选</span></label><select id="soProductPick"><option value="">选择商品</option></select></div>
+                      <div class="ops-field field-wide align-col-1" id="fieldSoOrderNo"><label for="soOrderNo">销售单号</label><input id="soOrderNo" placeholder="SO..." /></div>
+                      <div class="ops-field field-wide align-col-2"><label class="has-chip" for="soCustomerPick">客户 <span id="chipSoCustomerPick" class="select-chip">已选</span></label><select id="soCustomerPick"><option value="">选择客户</option></select><div id="boxQuickAddCustomerSales" class="row mt-6" style="display:none;gap:6px;"><input id="inputQuickAddCustomerSalesCode" class="w-120" placeholder="编码（可选）" /><input id="inputQuickAddCustomerSalesName" class="minw-140" placeholder="客户名称" /><button type="button" id="btnConfirmQuickAddCustomerSales">确定</button><button type="button" class="secondary" id="btnCancelQuickAddCustomerSales">取消</button></div></div>
+                      <div class="ops-field field-wide align-col-3"><label class="has-chip" for="soProductPick">商品 <span id="chipSoProductPick" class="select-chip">已选</span></label><select id="soProductPick"><option value="">选择商品</option></select></div>
                       <input id="soProductId" type="hidden" />
-                      <div class="ops-field field-narrow"><label for="soQty">数量</label><input id="soQty" type="number" step="0.01" min="0.0001" placeholder="如 20" /></div>
-                      <div class="ops-field field-narrow"><label for="soPrice">单价</label><input id="soPrice" type="number" step="0.01" min="0" placeholder="如 15" /></div>
+                      <div class="ops-field field-narrow align-col-4"><label for="soQty">数量</label><input id="soQty" type="number" step="0.01" min="0.0001" placeholder="如 20" /></div>
+                      <div class="ops-field field-narrow align-col-5"><label for="soPrice">单价</label><input id="soPrice" type="number" step="0.01" min="0" placeholder="如 15" /></div>
                       <div class="ops-field ops-field-action"><label>操作</label><button id="btnConfirmSales">确定</button></div>
                       </div>
                       <div id="soPreviewHint" class="muted" style="margin-top:6px;font-size:12px;"></div>
@@ -1415,12 +1769,11 @@
                     <details class="param-card-fold">
                       <summary><div class="ops-param-title">收款单参数</div></summary>
                       <div class="ops-fields">
-                      <div class="ops-field field-wide"><label for="rcNo">收款单号</label><input id="rcNo" placeholder="RC..." /></div>
-                      <div class="ops-field field-wide"><label class="has-chip" for="rcCustomerPick">客户 <span id="chipRcCustomerPick" class="select-chip">已选</span></label><select id="rcCustomerPick"><option value="">选择客户</option></select><div id="boxQuickAddCustomerReceipt" class="row mt-6" style="display:none;gap:6px;"><input id="inputQuickAddCustomerReceiptCode" class="w-120" placeholder="编码（可选）" /><input id="inputQuickAddCustomerReceiptName" class="minw-140" placeholder="客户名称" /><button type="button" id="btnConfirmQuickAddCustomerReceipt">确定</button><button type="button" class="secondary" id="btnCancelQuickAddCustomerReceipt">取消</button></div></div>
-                      <div class="ops-field field-wide"><label class="has-chip" for="rcArPick">应收单据 <span id="chipRcArPick" class="select-chip">已选</span></label><select id="rcArPick"><option value="">自动匹配未结应收</option></select></div>
+                      <div class="ops-field field-wide align-col-1" id="fieldRcNo"><label for="rcNo">收款单号</label><input id="rcNo" placeholder="RC..." /></div>
+                      <div class="ops-field field-wide align-col-2"><label class="has-chip" for="rcCustomerPick">客户 <span id="chipRcCustomerPick" class="select-chip">已选</span></label><select id="rcCustomerPick"><option value="">选择客户</option></select><div id="boxQuickAddCustomerReceipt" class="row mt-6" style="display:none;gap:6px;"><input id="inputQuickAddCustomerReceiptCode" class="w-120" placeholder="编码（可选）" /><input id="inputQuickAddCustomerReceiptName" class="minw-140" placeholder="客户名称" /><button type="button" id="btnConfirmQuickAddCustomerReceipt">确定</button><button type="button" class="secondary" id="btnCancelQuickAddCustomerReceipt">取消</button></div></div>
+                      <div class="ops-field field-wide align-col-3"><label class="has-chip" for="rcArPick">应收单据 <span id="chipRcArPick" class="select-chip">已选</span></label><select id="rcArPick"><option value="">自动匹配未结应收</option></select></div>
                       <input id="rcArInvoiceId" type="hidden" />
-                      <div class="ops-field field-narrow"><label for="rcAmount">收款金额</label><input id="rcAmount" type="number" step="0.01" min="0.01" placeholder="如 100" /></div>
-                      <div class="ops-field field-wide"><label>金额快捷</label><div class="row"><button type="button" class="secondary" id="btnRcAmountFull">全额</button><button type="button" class="secondary" id="btnRcAmountHalf">50%</button><button type="button" class="secondary" id="btnRcAmountClear">清零</button></div></div>
+                      <div class="ops-field field-narrow align-col-45"><label for="rcAmount">收款金额</label><input id="rcAmount" type="number" step="0.01" min="0.01" placeholder="如 100" /></div>
                       <div class="ops-field ops-field-action"><label>操作</label><button id="btnConfirmReceipt">确定</button></div>
                       </div>
                       <div id="rcPreviewHint" class="muted" style="margin-top:6px;font-size:12px;"></div>
@@ -1431,12 +1784,11 @@
                     <details class="param-card-fold">
                       <summary><div class="ops-param-title">付款单参数</div></summary>
                       <div class="ops-fields">
-                      <div class="ops-field field-wide"><label for="pyNo">付款单号</label><input id="pyNo" placeholder="PY..." /></div>
-                      <div class="ops-field field-wide"><label class="has-chip" for="pySupplierPick">供应商 <span id="chipPySupplierPick" class="select-chip">已选</span></label><select id="pySupplierPick"><option value="">选择供应商</option></select><div id="boxQuickAddSupplierPayment" class="row mt-6" style="display:none;gap:6px;"><input id="inputQuickAddSupplierPaymentCode" class="w-120" placeholder="编码（可选）" /><input id="inputQuickAddSupplierPaymentName" class="minw-140" placeholder="供应商名称" /><button type="button" id="btnConfirmQuickAddSupplierPayment">确定</button><button type="button" class="secondary" id="btnCancelQuickAddSupplierPayment">取消</button></div></div>
-                      <div class="ops-field field-wide"><label class="has-chip" for="pyApPick">应付单据 <span id="chipPyApPick" class="select-chip">已选</span></label><select id="pyApPick"><option value="">自动匹配未结应付</option></select></div>
+                      <div class="ops-field field-wide align-col-1" id="fieldPyNo"><label for="pyNo">付款单号</label><input id="pyNo" placeholder="PY..." /></div>
+                      <div class="ops-field field-wide align-col-2"><label class="has-chip" for="pySupplierPick">供应商 <span id="chipPySupplierPick" class="select-chip">已选</span></label><select id="pySupplierPick"><option value="">选择供应商</option></select><div id="boxQuickAddSupplierPayment" class="row mt-6" style="display:none;gap:6px;"><input id="inputQuickAddSupplierPaymentCode" class="w-120" placeholder="编码（可选）" /><input id="inputQuickAddSupplierPaymentName" class="minw-140" placeholder="供应商名称" /><button type="button" id="btnConfirmQuickAddSupplierPayment">确定</button><button type="button" class="secondary" id="btnCancelQuickAddSupplierPayment">取消</button></div></div>
+                      <div class="ops-field field-wide align-col-3"><label class="has-chip" for="pyApPick">应付单据 <span id="chipPyApPick" class="select-chip">已选</span></label><select id="pyApPick"><option value="">自动匹配未结应付</option></select></div>
                       <input id="pyApBillId" type="hidden" />
-                      <div class="ops-field field-narrow"><label for="pyAmount">付款金额</label><input id="pyAmount" type="number" step="0.01" min="0.01" placeholder="如 200" /></div>
-                      <div class="ops-field field-wide"><label>金额快捷</label><div class="row"><button type="button" class="secondary" id="btnPyAmountFull">全额</button><button type="button" class="secondary" id="btnPyAmountHalf">50%</button><button type="button" class="secondary" id="btnPyAmountClear">清零</button></div></div>
+                      <div class="ops-field field-narrow align-col-45"><label for="pyAmount">付款金额</label><input id="pyAmount" type="number" step="0.01" min="0.01" placeholder="如 200" /></div>
                       <div class="ops-field ops-field-action"><label>操作</label><button id="btnConfirmPayment">确定</button></div>
                       </div>
                       <div id="pyPreviewHint" class="muted" style="margin-top:6px;font-size:12px;"></div>
@@ -1449,7 +1801,7 @@
               </div>
               <section class="card" style="margin-top:8px;">
                 <h3 class="section-title">商品创建</h3>
-                <div class="row" style="margin-top:6px;align-items:flex-end;">
+                <div class="row create-form-grid" style="margin-top:6px;align-items:flex-end;">
                   <input id="newProductSku" class="w-130" placeholder="SKU（≥2字）" />
                   <input id="newProductName" class="minw-140" placeholder="名称（≥2字）" />
                   <input id="newProductUnit" class="w-90" placeholder="单位" />
@@ -1461,13 +1813,13 @@
               <section class="card" style="margin-top:8px;">
                 <h3 class="section-title">仓库 & 库位管理</h3>
                 <div class="muted" style="margin-bottom:6px;">用于维护仓库与库位；创建后会自动刷新执行区下拉。</div>
-                <div class="row" style="margin-top:6px;align-items:flex-end;">
+                <div class="row create-form-grid" style="margin-top:6px;align-items:flex-end;">
                   <input id="newWarehouseCode" class="w-160" placeholder="仓库编码（≥2字）" />
                   <input id="newWarehouseName" class="minw-180" placeholder="仓库名称（≥2字）" />
                   <button id="btnWarehouseCreate" type="button">创建仓库</button>
                 </div>
                 <div id="whSuggestBox" class="suggest-popover" role="listbox" aria-label="已有仓库列表"></div>
-                <div class="row" style="margin-top:6px;align-items:flex-end;">
+                <div class="row create-form-grid" style="margin-top:6px;align-items:flex-end;">
                   <select id="newLocationWarehousePick" class="minw-220"><option value="">选择仓库</option></select>
                   <input id="newLocationCode" class="w-160" placeholder="库位编码（≥2字）" />
                   <input id="newLocationName" class="minw-180" placeholder="库位名称（≥2字）" />
@@ -1527,13 +1879,15 @@
                 </div>
                 <div class="reminder-grid" style="margin-top:8px;">
                   <div>
-                    <div class="row" style="margin-bottom:6px;align-items:center;">
-                      <div class="muted" style="flex:1;">催收货：已审批但未完全收货</div>
-                      <input id="filterRemindReceipts" placeholder="按 单号/ID 搜索" style="max-width:220px;" />
-                      <select id="sortRemindReceipts" style="max-width:170px">
+                    <div class="reminder-head">
+                      <div class="reminder-title">已审批但未完全收货（采购）</div>
+                      <div class="reminder-tools">
+                        <input id="filterRemindReceipts" placeholder="按 单号/ID 搜索" />
+                        <select id="sortRemindReceipts">
                         <option value="age_desc">按超期：高到低</option>
                         <option value="qty_desc">按剩余量：高到低</option>
-                      </select>
+                        </select>
+                      </div>
                     </div>
                     <div id="remindReceiptsTable" class="table-wrap"></div>
                     <div class="pager" id="pagerRemindReceipts">
@@ -1551,13 +1905,15 @@
                     </div>
                   </div>
                   <div>
-                    <div class="row" style="margin-bottom:6px;align-items:center;">
-                      <div class="muted" style="flex:1;">催发货：已审批但未完全发货</div>
-                      <input id="filterRemindDeliveries" placeholder="按 单号/ID 搜索" style="max-width:220px;" />
-                      <select id="sortRemindDeliveries" style="max-width:170px">
+                    <div class="reminder-head">
+                      <div class="reminder-title">已审批但未完全发货（销售）</div>
+                      <div class="reminder-tools">
+                        <input id="filterRemindDeliveries" placeholder="按 单号/ID 搜索" />
+                        <select id="sortRemindDeliveries">
                         <option value="age_desc">按超期：高到低</option>
                         <option value="qty_desc">按剩余量：高到低</option>
-                      </select>
+                        </select>
+                      </div>
                     </div>
                     <div id="remindDeliveriesTable" class="table-wrap"></div>
                     <div class="pager" id="pagerRemindDeliveries">
@@ -1595,14 +1951,14 @@
 
             <section class="panel" id="panelApproval">
               <div class="approval-block">
-                <div class="approval-row">
+                <div class="approval-row approval-view-row">
                   <span class="row-title">视图</span>
                   <button class="secondary" id="btnLoadPoApprovals">采购单列表</button>
                   <button class="secondary" id="btnLoadSoApprovals">销售单列表</button>
                   <button class="secondary" id="btnLoadPendingApprovals">我的待审批</button>
                   <button class="secondary" id="btnLoadAbnormalApprovals">异常单据</button>
                 </div>
-                <div class="approval-row">
+                <div class="approval-row approval-filter-row">
                   <span class="row-title">筛选</span>
                   <input id="approvalSearch" placeholder="搜索：ID/单号/客户/供应商" />
                   <select id="approvalStageFilter" style="max-width:190px">
@@ -1632,7 +1988,7 @@
                     <span>只看我可操作</span>
                   </label>
                 </div>
-                <div class="approval-row" style="align-items:flex-end;">
+                <div class="approval-row approval-batch-row" style="align-items:flex-end;">
                   <span class="row-title">批量</span>
                   <input id="approvalBatchIds" placeholder="批量审批ID（逗号分隔，如 101,102）" />
                   <button class="secondary" id="btnSelectAllApprovalRows">勾选当前页</button>

@@ -108,6 +108,60 @@ function rebuildProductsTable() {
   }
 }
 
+function rebuildArInvoicesTable() {
+  // Rebuild to switch UNIQUE(invoice_no) -> UNIQUE(organization_id, invoice_no)
+  if (hasUniqueIndexOn("ar_invoices", ["organization_id", "invoice_no"])) return;
+
+  db.exec("BEGIN");
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS ar_invoices_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        organization_id INTEGER NOT NULL DEFAULT 1,
+        invoice_no TEXT NOT NULL,
+        customer_id INTEGER NOT NULL,
+        ref_type TEXT NOT NULL,
+        ref_id INTEGER NOT NULL,
+        total_amount REAL NOT NULL,
+        received_amount REAL NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'open',
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(customer_id) REFERENCES customers(id),
+        UNIQUE (organization_id, invoice_no)
+      );
+    `);
+    db.exec(`
+      INSERT INTO ar_invoices_new (id, organization_id, invoice_no, customer_id, ref_type, ref_id, total_amount, received_amount, status, created_at)
+      SELECT id, COALESCE(organization_id, 1), invoice_no, customer_id, ref_type, ref_id, total_amount, received_amount, status, created_at
+      FROM ar_invoices;
+    `);
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+
+  // Swap tables with FK checks temporarily disabled; child tables keep referencing "ar_invoices".
+  db.exec("PRAGMA foreign_keys = OFF");
+  db.exec("BEGIN");
+  try {
+    db.exec("DROP TABLE ar_invoices;");
+    db.exec("ALTER TABLE ar_invoices_new RENAME TO ar_invoices;");
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    // Best-effort cleanup for a partially created temp table.
+    try {
+      db.exec("DROP TABLE IF EXISTS ar_invoices_new;");
+    } catch (_ignore) {
+      // no-op
+    }
+    throw e;
+  } finally {
+    db.exec("PRAGMA foreign_keys = ON");
+  }
+}
+
 export function initDb() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
@@ -249,7 +303,7 @@ export function initDb() {
     CREATE TABLE IF NOT EXISTS ar_invoices (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       organization_id INTEGER NOT NULL DEFAULT 1,
-      invoice_no TEXT NOT NULL UNIQUE,
+      invoice_no TEXT NOT NULL,
       customer_id INTEGER NOT NULL,
       ref_type TEXT NOT NULL,
       ref_id INTEGER NOT NULL,
@@ -257,7 +311,8 @@ export function initDb() {
       received_amount REAL NOT NULL DEFAULT 0,
       status TEXT NOT NULL DEFAULT 'open',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY(customer_id) REFERENCES customers(id)
+      FOREIGN KEY(customer_id) REFERENCES customers(id),
+      UNIQUE (organization_id, invoice_no)
     );
 
     CREATE TABLE IF NOT EXISTS sales_order_items (
@@ -556,6 +611,27 @@ export function initDb() {
       delivered_at TEXT,
       FOREIGN KEY(endpoint_id) REFERENCES webhook_endpoints(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS ar_invoice_no_rules (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      organization_id INTEGER NOT NULL,
+      source TEXT NOT NULL DEFAULT 'order_no',
+      prefix TEXT NOT NULL DEFAULT 'AR-',
+      date_segment TEXT NOT NULL DEFAULT 'none',
+      sequence_digits INTEGER NOT NULL DEFAULT 4,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (organization_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS document_sequences (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      organization_id INTEGER NOT NULL,
+      doc_type TEXT NOT NULL,
+      period_key TEXT NOT NULL DEFAULT '',
+      current_value INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (organization_id, doc_type, period_key)
+    );
   `);
 
   ensureColumn("purchase_orders", "submitted_at", "TEXT");
@@ -611,6 +687,7 @@ export function initDb() {
   rebuildPartnerTable({ table: "customers", codeColumn: "code" });
   rebuildPartnerTable({ table: "suppliers", codeColumn: "code" });
   rebuildProductsTable();
+  rebuildArInvoicesTable();
 
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_stock_ledger_product ON stock_ledger(product_id);
@@ -649,6 +726,8 @@ export function initDb() {
     CREATE INDEX IF NOT EXISTS idx_idempotency_lookup ON api_idempotency(organization_id, endpoint, idempotency_key);
     CREATE INDEX IF NOT EXISTS idx_webhook_endpoints_org ON webhook_endpoints(organization_id, enabled);
     CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_status ON webhook_deliveries(status, next_attempt_at);
+    CREATE INDEX IF NOT EXISTS idx_ar_invoice_org_no ON ar_invoices(organization_id, invoice_no);
+    CREATE INDEX IF NOT EXISTS idx_doc_sequences_lookup ON document_sequences(organization_id, doc_type, period_key);
   `);
 
   const seedAdmin = db
@@ -705,6 +784,12 @@ export function initDb() {
   );
   seedAlertRule.run(1, "approval_overdue_hours", "24");
   seedAlertRule.run(1, "approval_scan_interval_ms", "300000");
+  db.prepare(
+    `
+    INSERT OR IGNORE INTO ar_invoice_no_rules (organization_id, source, prefix, date_segment, sequence_digits)
+    VALUES (1, 'order_no', 'AR-', 'none', 4)
+    `
+  ).run();
 
   db.prepare("INSERT OR IGNORE INTO warehouses (organization_id, code, name) VALUES (1, 'MAIN', 'Main Warehouse')").run();
   const wh = db

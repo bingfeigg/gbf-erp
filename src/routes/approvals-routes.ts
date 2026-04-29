@@ -2,6 +2,7 @@ import { Express } from "express";
 import db from "../db";
 import { auth, hasPermission, AuthenticatedRequest } from "../middleware/auth";
 import { canTransitionOrder } from "../services/order-helpers";
+import { makeArInvoiceNo } from "../services/ar-invoice-no";
 
 export function registerApprovalsRoutes(app: Express): void {
   const maybePaginate = <T>(req: AuthenticatedRequest, rows: T[]) => {
@@ -326,11 +327,11 @@ export function registerApprovalsRoutes(app: Express): void {
               .prepare(`SELECT id FROM ${billTable} WHERE organization_id = ? AND ref_type = ? AND ref_id = ? LIMIT 1`)
               .get(orgId, refType, order.id) as { id: number } | undefined;
             if (!existed) {
-              const noPrefix = orderType === "purchase" ? "AP-" : "AR-";
+              const docNo = t === "purchase" ? `AP-${order.orderNo}` : makeArInvoiceNo({ organizationId: orgId, orderNo: order.orderNo });
               db.prepare(
-                `INSERT INTO ${billTable} (organization_id, ${billNoCol}, ${orderType === "purchase" ? "supplier_id" : "customer_id"}, ref_type, ref_id, total_amount, ${amountPaidCol}, status)
+                `INSERT INTO ${billTable} (organization_id, ${billNoCol}, ${t === "purchase" ? "supplier_id" : "customer_id"}, ref_type, ref_id, total_amount, ${amountPaidCol}, status)
                  VALUES (?, ?, ?, ?, ?, ?, 0, 'open')`
-              ).run(orgId, `${noPrefix}${order.orderNo}`, order.partyId, refType, order.id, order.totalAmount);
+              ).run(orgId, docNo, order.partyId, refType, order.id, order.totalAmount);
             }
           }
 

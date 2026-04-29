@@ -1,9 +1,23 @@
 import { Express } from "express";
 import db from "../db";
 import { auth, requirePermission, getOrgId } from "../middleware/auth";
-import { configApprovalRuleSchema, configAlertRuleSchema, configWebhookEndpointSchema } from "../schemas/api";
+import { configApprovalRuleSchema, configAlertRuleSchema, configWebhookEndpointSchema, configArInvoiceNoRuleSchema } from "../schemas/api";
+import { getArInvoiceNoRule, saveArInvoiceNoRule } from "../services/ar-invoice-no";
 
 export function registerConfigRoutes(app: Express): void {
+  app.get("/api/config/ar-invoice-no-rule", auth, requirePermission("*"), (req, res) => {
+    const orgId = getOrgId(req);
+    res.json(getArInvoiceNoRule(orgId));
+  });
+
+  app.post("/api/config/ar-invoice-no-rule", auth, requirePermission("*"), (req, res, next) => {
+    const parsed = configArInvoiceNoRuleSchema.safeParse(req.body);
+    if (!parsed.success) return next(parsed.error);
+    const orgId = getOrgId(req);
+    const saved = saveArInvoiceNoRule(orgId, parsed.data);
+    res.json({ ok: true, rule: saved });
+  });
+
   app.get("/api/config/approval-rules", auth, requirePermission("*"), (req, res) => {
     const orgId = getOrgId(req);
     const rows = db

@@ -5,6 +5,7 @@ import { salesOrderSchema, orderActionSchema } from "../schemas/api";
 import { writeAuditLog } from "../services/audit";
 import { bodyHash, loadIdempotency, saveIdempotency } from "../services/idempotency";
 import { assertEntityExists, actionPermission, canTransitionOrder } from "../services/order-helpers";
+import { makeArInvoiceNo } from "../services/ar-invoice-no";
 
 export function registerSalesOrderRoutes(app: Express): void {
   const maybePaginate = <T>(req: { query: Record<string, unknown> }, rows: T[]) => {
@@ -289,7 +290,7 @@ export function registerSalesOrderRoutes(app: Express): void {
           arInvoice = existedInvoice;
           return { order, nextStatus, arInvoice };
         }
-        const invoiceNo = `AR-${order.orderNo}`;
+        const invoiceNo = makeArInvoiceNo({ organizationId: orgId, orderNo: order.orderNo });
         const ar = db
           .prepare(
             "INSERT INTO ar_invoices (organization_id, invoice_no, customer_id, ref_type, ref_id, total_amount, received_amount, status) VALUES (?, ?, ?, ?, ?, ?, 0, 'open')"

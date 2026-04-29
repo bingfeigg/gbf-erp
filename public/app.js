@@ -37,6 +37,7 @@ const arDetail = document.getElementById("arDetail");
 const apDetail = document.getElementById("apDetail");
 const approvalDetail = document.getElementById("approvalDetail");
 const actionToast = document.getElementById("actionToast");
+const appVersionInline = document.getElementById("appVersionInline");
 const whSuggestBox = document.getElementById("whSuggestBox");
 const locSuggestBox = document.getElementById("locSuggestBox");
 const approvalSlaCards = document.getElementById("approvalSlaCards");
@@ -84,6 +85,26 @@ const serverPager = {
   remindReceipts: { page: 1, pageSize: 10, total: 0 },
   remindDeliveries: { page: 1, pageSize: 10, total: 0 }
 };
+
+async function loadAppVersionInline() {
+  if (!appVersionInline) return;
+  try {
+    const resp = await fetch("/api/version", { headers: { Accept: "application/json" } });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const info = await resp.json();
+    const versionRaw = String(info?.version || "").trim();
+    const commitRaw = String(info?.commit || "").trim();
+    const builtAtRaw = String(info?.builtAt || "").trim();
+    const label = `${versionRaw ? `v${versionRaw}` : "v-"}${commitRaw ? ` (${commitRaw})` : ""}`;
+    appVersionInline.textContent = label;
+    appVersionInline.title = builtAtRaw ? `构建时间：${builtAtRaw}` : "版本信息";
+    appVersionInline.classList.remove("hidden");
+  } catch (_e) {
+    appVersionInline.classList.add("hidden");
+  }
+}
+
+void loadAppVersionInline();
 
 function invalidateExecutionOrderItems(orderType, orderId) {
   const key = `${orderType}:${orderId}`;
@@ -1326,14 +1347,14 @@ function sortByIdDesc(rows) {
 async function quickCreateParty(kind, codeInputId, nameInputId, boxId, targetSelectId) {
   const isSupplier = kind === "supplier";
   const typeText = isSupplier ? "供应商" : "客户";
-  const codePrefix = isSupplier ? "SUP" : "CUS";
   const codeRaw = document.getElementById(codeInputId)?.value.trim() || "";
   const nameRaw = document.getElementById(nameInputId)?.value.trim() || "";
   if (!nameRaw || nameRaw.length < 2) {
     throw new Error(`${typeText}名称至少 2 个字符。`);
   }
+  const unifiedPartyCode = `BP${Date.now().toString().slice(-8)}`; // 客户/供应商统一编号规则与长度
   const payload = {
-    code: (codeRaw && codeRaw.length >= 2 ? codeRaw : `${codePrefix}${Date.now().toString().slice(-6)}`).toUpperCase(),
+    code: (codeRaw && codeRaw.length >= 2 ? codeRaw : unifiedPartyCode).toUpperCase(),
     name: nameRaw
   };
   const path = isSupplier ? "/api/suppliers" : "/api/customers";
@@ -1675,6 +1696,19 @@ function supplierDisplayById(id) {
   return `${name || code || `#${n}`} (#${n})`;
 }
 
+function ellipsisText(s, maxLen) {
+  const raw = String(s || "");
+  const max = Math.max(4, Number(maxLen || 0) || 0);
+  if (raw.length <= max) return raw;
+  return `${raw.slice(0, Math.max(1, max - 1))}…`;
+}
+
+function supplierDisplayShortById(id) {
+  const full = supplierDisplayById(id);
+  // 表格里只展示短文本，避免把审批列表撑宽；完整信息放在 title 里
+  return ellipsisText(full, 18);
+}
+
 function getFilteredApprovalRows(rows) {
   const status = approvalStatusFilterValue();
   const stage = approvalStageFilterValue();
@@ -1814,7 +1848,14 @@ function renderApprovalTableFromCache() {
       { label: "选", getter: (r) => approvalCheckCell(r) },
       { label: "ID", getter: (r) => r.id },
       { label: "单号", getter: (r) => `<span title="${escapeHtml(r.orderNo || "-")}">${escapeHtml(r.orderNo || "-")}</span>` },
-        { label: "供应商", getter: (r) => supplierDisplayById(r.supplierId) },
+      {
+        label: "供应商",
+        getter: (r) => {
+          const full = supplierDisplayById(r.supplierId);
+          const short = supplierDisplayShortById(r.supplierId);
+          return `<span title="${escapeHtml(full)}">${escapeHtml(short)}</span>`;
+        }
+      },
       {
         label: "阶段",
         getter: (r) => {
@@ -2246,7 +2287,14 @@ function makeNo(prefix) {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   const rnd = Math.floor(1000 + Math.random() * 9000);
-  return `${prefix}${y}${m}${day}-${rnd}`;
+  // 单据号统一固定长度：2位类型前缀 + 8位日期 + 4位随机码
+  return `${prefix}${y}${m}${day}${rnd}`;
+}
+
+function assertDocNoLength(no, typeText) {
+  if (String(no || "").length !== 14) {
+    throw new Error(`${typeText}长度需为14位（示例：PO202604281234）。`);
+  }
 }
 
 function inputText(id) {
@@ -2762,28 +2810,6 @@ function renderPaymentPreviewHint() {
   el.textContent = `预览：供应商 ${supplier}；应付 ${ap}；付款金额 ${amount ? amount.toFixed(2) : "-"}`;
 }
 
-function pickOpenAmount(kind) {
-  if (kind === "receipt") {
-    const id = Number(selectNum("rcArPick") || 0);
-    const row = (settlementPickCache.ar || []).find((x) => Number(x.id || 0) === id);
-    return row ? Math.max(0, Number(row.totalAmount || 0) - Number(row.receivedAmount || 0)) : 0;
-  }
-  const id = Number(selectNum("pyApPick") || 0);
-  const row = (settlementPickCache.ap || []).find((x) => Number(x.id || 0) === id);
-  return row ? Math.max(0, Number(row.totalAmount || 0) - Number(row.paidAmount || 0)) : 0;
-}
-
-function applyAmountShortcut(kind, ratio) {
-  const open = pickOpenAmount(kind);
-  const targetId = kind === "receipt" ? "rcAmount" : "pyAmount";
-  const input = document.getElementById(targetId);
-  if (!input) return;
-  const v = ratio <= 0 ? 0 : open * ratio;
-  input.value = v > 0 ? v.toFixed(2) : "";
-  if (kind === "receipt") renderReceiptPreviewHint();
-  else renderPaymentPreviewHint();
-}
-
 function showPickOptionHint(text) {
   const el = document.getElementById("pickOptionHint");
   if (!el) return;
@@ -2977,6 +3003,7 @@ async function createPurchase() {
   if (!supplierId || !productId || qty <= 0 || price < 0) {
     throw new Error("采购参数无效：请检查供应商ID、商品ID、数量、单价。");
   }
+  assertDocNoLength(orderNo, "采购单号");
   const created = await api("/api/purchase-orders", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -3032,6 +3059,7 @@ async function createSales() {
   if (!customerId || !productId || qty <= 0 || price < 0) {
     throw new Error("销售参数无效：请检查客户ID、商品ID、数量、单价。");
   }
+  assertDocNoLength(orderNo, "销售单号");
   const created = await api("/api/sales-orders", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -3101,6 +3129,7 @@ async function createReceipt() {
     focusFirst(["rcArPick"]);
     throw new Error("收款参数无效：请先选择应收单据（未结）。");
   }
+  assertDocNoLength(receiptNo, "收款单号");
   if (!customerId || amount <= 0) throw new Error("收款参数无效：请检查客户ID与金额。");
   const result = await api("/api/finance/receipts", {
     method: "POST",
@@ -3149,6 +3178,7 @@ async function createPayment() {
     focusFirst(["pyApPick"]);
     throw new Error("付款参数无效：请先选择应付单据（未结）。");
   }
+  assertDocNoLength(paymentNo, "付款单号");
   if (!supplierId || amount <= 0) throw new Error("付款参数无效：请检查供应商ID与金额。");
   const result = await api("/api/finance/payments", {
     method: "POST",
@@ -4517,12 +4547,6 @@ bind("btnConfirmPurchase", createPurchase);
 bind("btnConfirmSales", createSales);
 bind("btnConfirmReceipt", createReceipt);
 bind("btnConfirmPayment", createPayment);
-bind("btnRcAmountFull", () => applyAmountShortcut("receipt", 1));
-bind("btnRcAmountHalf", () => applyAmountShortcut("receipt", 0.5));
-bind("btnRcAmountClear", () => applyAmountShortcut("receipt", 0));
-bind("btnPyAmountFull", () => applyAmountShortcut("payment", 1));
-bind("btnPyAmountHalf", () => applyAmountShortcut("payment", 0.5));
-bind("btnPyAmountClear", () => applyAmountShortcut("payment", 0));
 bind("btnWarehouseCreate", createWarehouseFromForm);
 bind("btnLocationCreate", createLocationFromForm);
 bind("btnCreateReceiptFlow", createPurchaseReceiptFlow);

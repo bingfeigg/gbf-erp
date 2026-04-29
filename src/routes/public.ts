@@ -1,5 +1,6 @@
 import { Express } from "express";
 import path from "path";
+import { getVersionInfo } from "../version";
 
 export function registerPublicRoutes(app: Express): void {
   app.get("/health", (_req, res) => {
@@ -9,6 +10,10 @@ export function registerPublicRoutes(app: Express): void {
       status: "running",
       statusText: "运行正常"
     });
+  });
+
+  app.get("/api/version", (_req, res) => {
+    res.json(getVersionInfo());
   });
 
   app.get("/", (_req, res) => {
