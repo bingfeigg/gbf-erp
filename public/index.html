@@ -28,6 +28,8 @@
           radial-gradient(circle at 8% 6%, #1b325f 0%, transparent 32%),
           linear-gradient(160deg, #081121 0%, #0c172b 55%, #0a1426 100%);
         min-height: 100vh;
+        overflow-y: scroll;
+        scrollbar-gutter: stable;
       }
       .hidden { display: none !important; }
       .login-shell {
@@ -96,24 +98,16 @@
         border-radius: 999px;
       }
       .right-col { display: grid; gap: 12px; min-width: 0; align-content: start; }
-      #mainWorkspaceCard { width: 100%; max-width: none; }
       /* Keep create panel layout consistent with other panels */
-      #appShell.mode-form #panelCreate {
+      #appShell.mode-form #panelProductCreate,
+      #appShell.mode-form #panelDocCreate {
         max-width: none;
         margin: 0;
       }
-      #appShell.mode-table #panelCreate {
+      #appShell.mode-table #panelProductCreate,
+      #appShell.mode-table #panelDocCreate {
         max-width: none;
         margin: 0;
-      }
-      #appShell.mode-table #mainWorkspaceCard .panel.active > .row:first-child {
-        position: sticky;
-        top: 0;
-        z-index: 6;
-        padding: 4px 0 8px;
-        margin-bottom: 8px;
-        background: linear-gradient(180deg, rgba(16, 28, 52, .96), rgba(16, 28, 52, .86));
-        border-bottom: 1px solid rgba(255,255,255,.10);
       }
       .quickbar {
         display: flex;
@@ -512,19 +506,42 @@
         line-height: 1.25;
         overflow: hidden;
         text-overflow: ellipsis;
+        padding: 5px 6px;
+        font-size: 12px;
       }
       #panelApproval #approvalTable th.th-status,
       #panelApproval #approvalTable td.td-status,
       #panelApproval #approvalTable th.th-stage,
       #panelApproval #approvalTable td.td-stage {
-        width: 92px;
+        width: 84px;
+        text-align: center;
+      }
+      #panelApproval #approvalTable th.th-type,
+      #panelApproval #approvalTable td.td-type {
+        width: 64px;
+        text-align: center;
+      }
+      #panelApproval #approvalTable th.th-orderno,
+      #panelApproval #approvalTable td.td-orderno {
+        width: 120px;
+        max-width: 120px;
+      }
+      #panelApproval #approvalTable th.th-party,
+      #panelApproval #approvalTable td.td-party {
+        width: 150px;
+        max-width: 150px;
+      }
+      #panelApproval #approvalTable th.th-reject,
+      #panelApproval #approvalTable td.td-reject {
+        width: 140px;
       }
       #panelApproval #approvalTable th.th-amount {
-        width: 96px;
+        width: 78px;
       }
       #panelApproval #approvalTable th.th-time,
       #panelApproval #approvalTable td.td-time {
-        min-width: 172px;
+        min-width: 132px;
+        width: 132px;
       }
       #panelApproval details.approval-overdue {
         margin-top: 2px;
@@ -843,6 +860,21 @@
         display: grid;
         gap: 6px;
       }
+      .module-nav-group {
+        border: 1px solid rgba(255,255,255,.1);
+        border-radius: 8px;
+        padding: 6px;
+        background: rgba(255,255,255,.02);
+      }
+      .module-nav-group + .module-nav-group {
+        margin-top: 2px;
+      }
+      .module-nav-group-title {
+        font-size: 11px;
+        color: #9fb1d8;
+        letter-spacing: .2px;
+        margin-bottom: 6px;
+      }
       .module-quick {
         margin-top: 10px;
         padding-top: 10px;
@@ -883,7 +915,8 @@
         grid-template-columns: 1fr;
         gap: 8px;
       }
-      #panelCreate {
+      #panelProductCreate,
+      #panelDocCreate {
         grid-template-columns: 1fr;
         gap: 8px;
         max-width: none;
@@ -891,68 +924,82 @@
         min-width: 0;
         overflow-x: clip;
       }
-      #panelCreate.panel.active {
+      #panelProductCreate.panel.active,
+      #panelDocCreate.panel.active {
         display: grid;
       }
-      #panelCreate > .card {
+      #panelProductCreate > .card,
+      #panelDocCreate > .card {
         width: 100%;
         max-width: 100%;
         min-width: 0;
       }
-      #panelCreate .row {
+      #panelProductCreate .row,
+      #panelDocCreate .row {
         flex-wrap: wrap;
       }
-      #panelCreate .row > input,
-      #panelCreate .row > select {
+      #panelProductCreate .row > input,
+      #panelProductCreate .row > select,
+      #panelDocCreate .row > input,
+      #panelDocCreate .row > select {
         flex: 1 1 220px;
         max-width: none;
       }
-      #panelCreate .row > button {
+      #panelProductCreate .row > button,
+      #panelDocCreate .row > button {
         flex: 0 0 auto;
       }
-      #panelCreate .create-form-grid {
+      #panelProductCreate .create-form-grid,
+      #panelDocCreate .create-form-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
         gap: 8px;
         align-items: end;
       }
-      #panelCreate .create-form-grid > * {
+      #panelProductCreate .create-form-grid > *,
+      #panelDocCreate .create-form-grid > * {
         min-width: 0;
         width: 100%;
         max-width: none !important;
       }
-      #panelCreate .create-form-grid > button {
+      #panelProductCreate .create-form-grid > button,
+      #panelDocCreate .create-form-grid > button {
         min-height: 36px;
         width: auto;
         min-width: 6ch;
         justify-self: end;
       }
-      #panelCreate .ops-field.ops-field-action button {
+      #panelProductCreate .ops-field.ops-field-action button,
+      #panelDocCreate .ops-field.ops-field-action button {
         width: auto;
         min-width: 6ch;
         justify-self: end;
       }
-      #panelCreate .row > button {
+      #panelProductCreate .row > button,
+      #panelDocCreate .row > button {
         min-width: 120px;
       }
-      #panelCreate .ops-field.ops-field-action {
+      #panelProductCreate .ops-field.ops-field-action,
+      #panelDocCreate .ops-field.ops-field-action {
         display: flex;
         align-items: end;
         justify-content: flex-end;
         grid-column: 6;
       }
-      #panelCreate .card .row > input[style],
-      #panelCreate .card .row > select[style] {
+      #panelProductCreate .card .row > input[style],
+      #panelProductCreate .card .row > select[style],
+      #panelDocCreate .card .row > input[style],
+      #panelDocCreate .card .row > select[style] {
         max-width: none !important;
       }
-      #panelCreate #bizParamsWorkbench,
-      #panelCreate #userOpsSection,
-      #panelCreate #bizParamsGroup,
-      #panelCreate #bizParamGrid,
-      #panelCreate .ops-param-card,
-      #panelCreate .param-card-fold,
-      #panelCreate .ops-fields,
-      #panelCreate .ops-field {
+      #panelDocCreate #bizParamsWorkbench,
+      #panelDocCreate #userOpsSection,
+      #panelDocCreate #bizParamsGroup,
+      #panelDocCreate #bizParamGrid,
+      #panelDocCreate .ops-param-card,
+      #panelDocCreate .param-card-fold,
+      #panelDocCreate .ops-fields,
+      #panelDocCreate .ops-field {
         width: 100%;
         max-width: 100%;
         min-width: 0;
@@ -1066,20 +1113,20 @@
       th.th-time { background: rgba(110, 168, 255, .18); color: #d8e7ff; }
       th.th-id { background: rgba(255,255,255,.08); color: #e5ecff; }
       th.th-check, td.td-check {
-        width: 58px;
-        min-width: 58px;
-        max-width: 58px;
+        width: 50px;
+        min-width: 50px;
+        max-width: 50px;
         text-align: center;
       }
       th.th-idcol, td.td-idcol {
-        width: 68px;
-        min-width: 68px;
-        max-width: 68px;
+        width: 60px;
+        min-width: 60px;
+        max-width: 60px;
         text-align: center;
         font-variant-numeric: tabular-nums;
       }
       td.td-check.first-col, th.th-check.first-col {
-        min-width: 58px;
+        min-width: 50px;
       }
       th.th-orderno, td.td-orderno {
         width: 210px;
@@ -1100,6 +1147,7 @@
       .table-wrap {
         max-height: 520px;
         overflow: auto;
+        scrollbar-gutter: stable;
         overscroll-behavior: contain;
         border: 1px solid rgba(255,255,255,.12);
         border-radius: 8px;
@@ -1213,9 +1261,10 @@
       /* 宽屏：审批工作台使用“主列表 + 侧栏”两列，信息密度更高 */
       @media (min-width: 1200px) {
         #panelApproval .split {
-          grid-template-columns: minmax(0, 1.55fr) minmax(360px, 1fr);
+          grid-template-columns: minmax(0, 1fr) 360px;
           gap: 12px;
           grid-template-areas: "main side";
+          width: 100%;
           min-width: 0;
         }
         #panelApproval .split-side {
@@ -1223,15 +1272,24 @@
           position: sticky;
           top: 12px;
           grid-template-columns: 1fr;
+          width: 360px;
+          min-width: 360px;
+          max-width: 360px;
           max-height: calc(100vh - 24px);
-          overflow: auto;
+          overflow-x: hidden;
+          overflow-y: auto;
           overscroll-behavior: contain;
         }
         #panelApproval .split-side .drawer {
           padding: 8px;
+          min-width: 0;
+          overflow: hidden;
         }
         #panelApproval .approval-main-stack {
           grid-area: main;
+          min-width: 0;
+          width: 100%;
+          overflow: hidden;
         }
       }
 
@@ -1594,12 +1652,16 @@
           margin-right: 0;
         }
         #bizParamGrid .ops-field.align-col-45 { grid-column: auto; }
-        #panelCreate .create-form-grid { grid-template-columns: 1fr; }
-        #panelCreate .ops-field.ops-field-action {
+        #panelProductCreate .create-form-grid,
+        #panelDocCreate .create-form-grid { grid-template-columns: 1fr; }
+        #panelProductCreate .ops-field.ops-field-action,
+        #panelDocCreate .ops-field.ops-field-action {
           justify-content: stretch;
         }
-        #panelCreate .ops-field.ops-field-action button,
-        #panelCreate .create-form-grid > button,
+        #panelProductCreate .ops-field.ops-field-action button,
+        #panelDocCreate .ops-field.ops-field-action button,
+        #panelProductCreate .create-form-grid > button,
+        #panelDocCreate .create-form-grid > button,
         .exec-actions button {
           width: auto;
           min-width: 6ch;
@@ -1659,34 +1721,35 @@
 
       <div class="layout">
         <aside class="left-col">
-          <section class="card" id="mainWorkspaceCard">
-            <details class="fold" open>
-              <summary>创建中心</summary>
-              <div class="fold-content">
-                <div id="bizActionButtons" class="biz-action-buttons">
-                  <button id="btnBizAddProduct">新增商品</button>
-                  <button id="btnBizPurchase">创建采购单</button>
-                  <button id="btnBizSales">创建销售单</button>
-                  <button id="btnBizReceipt">创建收款单</button>
-                  <button id="btnBizPayment">创建付款单</button>
-                </div>
-              </div>
-            </details>
-          </section>
           <section class="card">
             <details class="fold" open>
               <summary>导航中心</summary>
               <div class="fold-content">
                 <div class="module-nav">
-                  <button id="navCreate" data-panel="panelCreate" class="nav-active">单据&商品创建</button>
-                  <button id="navApproval" data-panel="panelApproval">审批工作台</button>
-                  <button id="navAr" data-panel="panelAr">应收管理</button>
-                  <button id="navAp" data-panel="panelAp">应付管理</button>
-                  <button id="navProducts" data-panel="panelProducts">商品库存</button>
-                  <button id="navJournals" data-panel="panelJournals">凭证中心</button>
-                  <button id="navTrend" data-panel="panelTrend">趋势图表</button>
-                  <button id="navAudit" data-panel="panelAudit">审计日志</button>
-                  <button id="navAlerts" data-panel="panelAlerts">告警事件</button>
+                  <div class="module-nav-group">
+                    <div class="module-nav-group-title">创建</div>
+                    <button id="navProductCreate" data-panel="panelProductCreate" class="nav-active">商品创建</button>
+                    <button id="navDocCreate" data-panel="panelDocCreate">单据创建</button>
+                  </div>
+                  <div class="module-nav-group">
+                    <div class="module-nav-group-title">执行</div>
+                    <button id="navPurchaseExec" data-panel="panelPurchaseExec">采购执行</button>
+                    <button id="navSalesExec" data-panel="panelSalesExec">销售执行</button>
+                  </div>
+                  <div class="module-nav-group">
+                    <div class="module-nav-group-title">审批与资金</div>
+                    <button id="navApproval" data-panel="panelApproval">审批工作台</button>
+                    <button id="navAr" data-panel="panelAr">应收管理</button>
+                    <button id="navAp" data-panel="panelAp">应付管理</button>
+                  </div>
+                  <div class="module-nav-group">
+                    <div class="module-nav-group-title">分析与治理</div>
+                    <button id="navProducts" data-panel="panelProducts">商品库存</button>
+                    <button id="navJournals" data-panel="panelJournals">凭证中心</button>
+                    <button id="navTrend" data-panel="panelTrend">趋势图表</button>
+                    <button id="navAudit" data-panel="panelAudit">审计日志</button>
+                    <button id="navAlerts" data-panel="panelAlerts">告警事件</button>
+                  </div>
                 </div>
               </div>
             </details>
@@ -1726,8 +1789,40 @@
 
         <main class="right-col">
           <section class="card">
-            <h3 class="section-title" id="currentModuleTitle">单据&商品创建</h3>
-            <section class="panel active" id="panelCreate">
+            <h3 class="section-title" id="currentModuleTitle">商品创建</h3>
+            <section class="panel active" id="panelProductCreate">
+              <section class="card" style="margin-top:8px;">
+                <h3 class="section-title">商品创建</h3>
+                <div class="row create-form-grid" style="margin-top:6px;align-items:flex-end;">
+                  <input id="newProductSku" class="w-130" placeholder="SKU（≥2字）" />
+                  <input id="newProductName" class="minw-140" placeholder="名称（≥2字）" />
+                  <input id="newProductUnit" class="w-90" placeholder="单位" />
+                  <input id="newProductCost" class="w-100" type="number" step="0.01" min="0" placeholder="成本价" />
+                  <input id="newProductSale" class="w-100" type="number" step="0.01" min="0" placeholder="销售价" />
+                  <button id="btnProductAdd" type="button">新增商品</button>
+                </div>
+              </section>
+              <section class="card" id="sectionWarehouseLocation" style="margin-top:8px;">
+                <h3 class="section-title">仓库 & 库位管理</h3>
+                <div class="muted" style="margin-bottom:6px;">用于维护仓库与库位；创建后会自动刷新执行区下拉。</div>
+                <div class="row create-form-grid" style="margin-top:6px;align-items:flex-end;">
+                  <input id="newWarehouseCode" class="w-160" placeholder="仓库编码（≥2字）" />
+                  <input id="newWarehouseName" class="minw-180" placeholder="仓库名称（≥2字）" />
+                  <button id="btnWarehouseCreate" type="button">创建仓库</button>
+                </div>
+                <div id="whSuggestBox" class="suggest-popover" role="listbox" aria-label="已有仓库列表"></div>
+                <div class="row create-form-grid" style="margin-top:6px;align-items:flex-end;">
+                  <select id="newLocationWarehousePick" class="minw-220"><option value="">选择仓库</option></select>
+                  <input id="newLocationCode" class="w-160" placeholder="库位编码（≥2字）" />
+                  <input id="newLocationName" class="minw-180" placeholder="库位名称（≥2字）" />
+                  <button id="btnLocationCreate" type="button">创建库位</button>
+                </div>
+                <div id="locSuggestBox" class="suggest-popover" role="listbox" aria-label="已有库位列表"></div>
+                <div id="whLocActionFeedback" class="inline-action-feedback"></div>
+              </section>
+            </section>
+
+            <section class="panel" id="panelDocCreate">
               <div id="bizParamsWorkbench" class="mb-0" style="margin-bottom:10px;">
               <div id="userOpsSection" class="ops-user-grid">
                 <div class="ops-group" id="bizParamsGroup">
@@ -1800,36 +1895,20 @@
               </div>
               </div>
               <section class="card" style="margin-top:8px;">
-                <h3 class="section-title">商品创建</h3>
-                <div class="row create-form-grid" style="margin-top:6px;align-items:flex-end;">
-                  <input id="newProductSku" class="w-130" placeholder="SKU（≥2字）" />
-                  <input id="newProductName" class="minw-140" placeholder="名称（≥2字）" />
-                  <input id="newProductUnit" class="w-90" placeholder="单位" />
-                  <input id="newProductCost" class="w-100" type="number" step="0.01" min="0" placeholder="成本价" />
-                  <input id="newProductSale" class="w-100" type="number" step="0.01" min="0" placeholder="销售价" />
-                  <button id="btnProductAdd" type="button">新增商品</button>
+                <h3 class="section-title">业务影响速查</h3>
+                <div class="muted" style="line-height:1.6;">
+                  采购：创建订单（草稿阶段无 KPI 影响）→ 审批通过（生成应付账单，应付未付↑）→ 采购收货（库存↑、剩余未收↓；生成凭证：库存/应付）→ 采购付款（应付未付↓、现金↓；生成凭证：应付/现金）。<br />
+                  销售：创建订单（草稿阶段无 KPI 影响）→ 审批通过（生成应收发票，应收未收↑）→ 销售发货（库存↓、剩余未发↓；生成凭证：应收/收入 + 成本/库存）→ 销售收款（应收未收↓、现金↑；生成凭证：现金/应收）。<br />
+                  退货：采购退货（库存↓；生成凭证：应付/库存；回滚已收数量）｜销售退货（库存↑；生成凭证：收入冲回/应收冲回 + 库存回补/成本冲回；回滚已发数量）。注意：退货不会自动回写应收发票/应付账单余额，KPI（应收未收/应付未付）以发票/账单余额为准。
                 </div>
               </section>
-              <section class="card" style="margin-top:8px;">
-                <h3 class="section-title">仓库 & 库位管理</h3>
-                <div class="muted" style="margin-bottom:6px;">用于维护仓库与库位；创建后会自动刷新执行区下拉。</div>
-                <div class="row create-form-grid" style="margin-top:6px;align-items:flex-end;">
-                  <input id="newWarehouseCode" class="w-160" placeholder="仓库编码（≥2字）" />
-                  <input id="newWarehouseName" class="minw-180" placeholder="仓库名称（≥2字）" />
-                  <button id="btnWarehouseCreate" type="button">创建仓库</button>
-                </div>
-                <div id="whSuggestBox" class="suggest-popover" role="listbox" aria-label="已有仓库列表"></div>
-                <div class="row create-form-grid" style="margin-top:6px;align-items:flex-end;">
-                  <select id="newLocationWarehousePick" class="minw-220"><option value="">选择仓库</option></select>
-                  <input id="newLocationCode" class="w-160" placeholder="库位编码（≥2字）" />
-                  <input id="newLocationName" class="minw-180" placeholder="库位名称（≥2字）" />
-                  <button id="btnLocationCreate" type="button">创建库位</button>
-                </div>
-                <div id="locSuggestBox" class="suggest-popover" role="listbox" aria-label="已有库位列表"></div>
-                <div id="whLocActionFeedback" class="inline-action-feedback"></div>
-              </section>
+            </section>
+
+            <section class="panel" id="panelPurchaseExec">
               <section class="card" style="margin-top:8px;">
                 <h3 class="section-title">采购执行（收货 / 退货）</h3>
+                <div class="muted" style="margin-bottom:6px;">按已审批采购订单执行收货/退货，库存与凭证将实时联动。</div>
+                <div id="execPurchaseTodoHint" class="ops-note muted" style="margin-bottom:8px;">待执行：加载中...</div>
                 <div class="row exec-row" style="margin-top:6px;">
                   <select id="execPurchaseOrderPick"><option value="">选择已审批采购订单</option></select>
                   <input id="execPurchaseOrderId" type="number" min="1" placeholder="采购订单ID" />
@@ -1845,8 +1924,13 @@
                 </div>
                 <div id="execPurchaseFeedback" class="inline-action-feedback"></div>
               </section>
+            </section>
+
+            <section class="panel" id="panelSalesExec">
               <section class="card" style="margin-top:8px;">
                 <h3 class="section-title">销售执行（发货 / 退货）</h3>
+                <div class="muted" style="margin-bottom:6px;">按已审批销售订单执行发货/退货，库存与应收口径同步更新。</div>
+                <div id="execSalesTodoHint" class="ops-note muted" style="margin-bottom:8px;">待执行：加载中...</div>
                 <div class="row exec-row" style="margin-top:6px;">
                   <select id="execSalesOrderPick"><option value="">选择已审批销售订单</option></select>
                   <input id="execSalesOrderId" type="number" min="1" placeholder="销售订单ID" />
@@ -1861,76 +1945,6 @@
                   </div>
                 </div>
                 <div id="execSalesFeedback" class="inline-action-feedback"></div>
-              </section>
-              <section class="card" style="margin-top:8px;">
-                <h3 class="section-title">业务影响速查</h3>
-                <div class="muted" style="line-height:1.6;">
-                  采购：创建单据（仅订单）→ 审批通过（应付未付增加）→ 采购收货（库存增加、剩余未收减少）→ 采购付款（应付未付减少）。<br />
-                  销售：创建单据（仅订单）→ 审批通过（应收未收增加）→ 销售发货（库存减少、剩余未发减少）→ 销售收款（应收未收减少）。<br />
-                  退货：采购退货通常冲减库存与应付口径；销售退货通常回补库存并冲回应收/收入口径。
-                </div>
-              </section>
-              <section class="card" style="margin-top:8px;">
-                <h3 class="section-title">催办列表（单号）</h3>
-                <div class="row" style="margin-top:6px;">
-                  <button class="danger" id="btnRemindReceipts" type="button">催收货（采购）</button>
-                  <button class="danger" id="btnRemindDeliveries" type="button">催发货（销售）</button>
-                  <span class="muted" style="margin-left:6px;">规则：超期 ≥ 2 天标黄；超期 ≥ 7 天标红（默认规则）。</span>
-                </div>
-                <div class="reminder-grid" style="margin-top:8px;">
-                  <div>
-                    <div class="reminder-head">
-                      <div class="reminder-title">已审批但未完全收货（采购）</div>
-                      <div class="reminder-tools">
-                        <input id="filterRemindReceipts" placeholder="按 单号/ID 搜索" />
-                        <select id="sortRemindReceipts">
-                        <option value="age_desc">按超期：高到低</option>
-                        <option value="qty_desc">按剩余量：高到低</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div id="remindReceiptsTable" class="table-wrap"></div>
-                    <div class="pager" id="pagerRemindReceipts">
-                      <button class="secondary" id="btnRemindReceiptsPrev" type="button">上一页</button>
-                      <button class="secondary" id="btnRemindReceiptsNext" type="button">下一页</button>
-                      <select id="remindReceiptsPageSize" style="max-width:90px">
-                        <option value="10" selected>10/页</option>
-                        <option value="20">20/页</option>
-                        <option value="50">50/页</option>
-                        <option value="100">100/页</option>
-                      </select>
-                      <input id="remindReceiptsPageJump" type="number" min="1" placeholder="页码" style="max-width:80px" />
-                      <button class="secondary" id="btnRemindReceiptsJump" type="button">跳转</button>
-                      <span id="remindReceiptsPagerInfo" class="muted">分页：-</span>
-                    </div>
-                  </div>
-                  <div>
-                    <div class="reminder-head">
-                      <div class="reminder-title">已审批但未完全发货（销售）</div>
-                      <div class="reminder-tools">
-                        <input id="filterRemindDeliveries" placeholder="按 单号/ID 搜索" />
-                        <select id="sortRemindDeliveries">
-                        <option value="age_desc">按超期：高到低</option>
-                        <option value="qty_desc">按剩余量：高到低</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div id="remindDeliveriesTable" class="table-wrap"></div>
-                    <div class="pager" id="pagerRemindDeliveries">
-                      <button class="secondary" id="btnRemindDeliveriesPrev" type="button">上一页</button>
-                      <button class="secondary" id="btnRemindDeliveriesNext" type="button">下一页</button>
-                      <select id="remindDeliveriesPageSize" style="max-width:90px">
-                        <option value="10" selected>10/页</option>
-                        <option value="20">20/页</option>
-                        <option value="50">50/页</option>
-                        <option value="100">100/页</option>
-                      </select>
-                      <input id="remindDeliveriesPageJump" type="number" min="1" placeholder="页码" style="max-width:80px" />
-                      <button class="secondary" id="btnRemindDeliveriesJump" type="button">跳转</button>
-                      <span id="remindDeliveriesPagerInfo" class="muted">分页：-</span>
-                    </div>
-                  </div>
-                </div>
               </section>
             </section>
 
@@ -2078,6 +2092,68 @@
                   </details>
                 </div>
               </div>
+              <section class="card" style="margin-top:10px;">
+                <h3 class="section-title">执行催办（单号）</h3>
+                <div class="row" style="margin-top:6px;">
+                  <button class="danger" id="btnRemindReceipts" type="button">催收货（采购）</button>
+                  <button class="danger" id="btnRemindDeliveries" type="button">催发货（销售）</button>
+                  <span class="muted" style="margin-left:6px;">规则：超期 ≥ 2 天标黄；超期 ≥ 7 天标红（默认规则）。</span>
+                </div>
+                <div class="reminder-grid" style="margin-top:8px;">
+                  <div>
+                    <div class="reminder-head">
+                      <div class="reminder-title">已审批但未完全收货（采购）</div>
+                      <div class="reminder-tools">
+                        <input id="filterRemindReceipts" placeholder="按 单号/ID 搜索" />
+                        <select id="sortRemindReceipts">
+                        <option value="age_desc">按超期：高到低</option>
+                        <option value="qty_desc">按剩余量：高到低</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div id="remindReceiptsTable" class="table-wrap"></div>
+                    <div class="pager" id="pagerRemindReceipts">
+                      <button class="secondary" id="btnRemindReceiptsPrev" type="button">上一页</button>
+                      <button class="secondary" id="btnRemindReceiptsNext" type="button">下一页</button>
+                      <select id="remindReceiptsPageSize" style="max-width:90px">
+                        <option value="10" selected>10/页</option>
+                        <option value="20">20/页</option>
+                        <option value="50">50/页</option>
+                        <option value="100">100/页</option>
+                      </select>
+                      <input id="remindReceiptsPageJump" type="number" min="1" placeholder="页码" style="max-width:80px" />
+                      <button class="secondary" id="btnRemindReceiptsJump" type="button">跳转</button>
+                      <span id="remindReceiptsPagerInfo" class="muted">分页：-</span>
+                    </div>
+                  </div>
+                  <div>
+                    <div class="reminder-head">
+                      <div class="reminder-title">已审批但未完全发货（销售）</div>
+                      <div class="reminder-tools">
+                        <input id="filterRemindDeliveries" placeholder="按 单号/ID 搜索" />
+                        <select id="sortRemindDeliveries">
+                        <option value="age_desc">按超期：高到低</option>
+                        <option value="qty_desc">按剩余量：高到低</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div id="remindDeliveriesTable" class="table-wrap"></div>
+                    <div class="pager" id="pagerRemindDeliveries">
+                      <button class="secondary" id="btnRemindDeliveriesPrev" type="button">上一页</button>
+                      <button class="secondary" id="btnRemindDeliveriesNext" type="button">下一页</button>
+                      <select id="remindDeliveriesPageSize" style="max-width:90px">
+                        <option value="10" selected>10/页</option>
+                        <option value="20">20/页</option>
+                        <option value="50">50/页</option>
+                        <option value="100">100/页</option>
+                      </select>
+                      <input id="remindDeliveriesPageJump" type="number" min="1" placeholder="页码" style="max-width:80px" />
+                      <button class="secondary" id="btnRemindDeliveriesJump" type="button">跳转</button>
+                      <span id="remindDeliveriesPagerInfo" class="muted">分页：-</span>
+                    </div>
+                  </div>
+                </div>
+              </section>
             </section>
 
             <section class="panel" id="panelAr">

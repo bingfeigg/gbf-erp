@@ -235,7 +235,10 @@ const rejectSummaryCache = new Map();
 const tabButtons = Array.from(document.querySelectorAll(".tab"));
 const moduleNavButtons = Array.from(document.querySelectorAll(".module-nav [data-panel]"));
 const panels = {
-  panelCreate: document.getElementById("panelCreate"),
+  panelProductCreate: document.getElementById("panelProductCreate"),
+  panelDocCreate: document.getElementById("panelDocCreate"),
+  panelPurchaseExec: document.getElementById("panelPurchaseExec"),
+  panelSalesExec: document.getElementById("panelSalesExec"),
   panelProducts: document.getElementById("panelProducts"),
   panelApproval: document.getElementById("panelApproval"),
   panelAr: document.getElementById("panelAr"),
@@ -325,7 +328,10 @@ async function loadRemindDeliveries() {
   showActionOk(`催发货加载完成：${(rows || []).length} 条`);
 }
 const panelTitles = {
-  panelCreate: "单据&商品创建",
+  panelProductCreate: "商品创建",
+  panelDocCreate: "单据创建",
+  panelPurchaseExec: "采购执行",
+  panelSalesExec: "销售执行",
   panelApproval: "审批工作台",
   panelAr: "应收管理",
   panelAp: "应付管理",
@@ -334,6 +340,9 @@ const panelTitles = {
   panelTrend: "趋势图表",
   panelAudit: "审计日志",
   panelAlerts: "告警事件"
+};
+const ROLE_ALIAS = {
+  root: "admin"
 };
 const roleWorkspacePreset = {
   sales: {
@@ -360,11 +369,28 @@ const roleWorkspacePreset = {
     defaultPanel: "panelApproval",
     preferredBizButtons: ["btnBizPurchase", "btnBizSales", "btnBizPending", "btnBizSubmit", "btnBizApprove", "btnBizReceipt", "btnBizPayment", "btnBizRefresh"],
     preferredParamCards: ["paramCardPurchase", "paramCardSales", "paramCardReceipt", "paramCardPayment"]
+  }
+};
+const roleTodoConfig = {
+  sales: {
+    base: ["优先检查销售草稿并提交审批。", "收款后刷新应收与凭证，确认状态同步。"],
+    withCounters: ({ arOpen }) => (arOpen > 0 ? [`有 ${arOpen} 条应收未收，建议跟进收款。`] : [])
   },
-  root: {
-    defaultPanel: "panelApproval",
-    preferredBizButtons: ["btnBizPurchase", "btnBizSales", "btnBizPending", "btnBizSubmit", "btnBizApprove", "btnBizReceipt", "btnBizPayment", "btnBizRefresh"],
-    preferredParamCards: ["paramCardPurchase", "paramCardSales", "paramCardReceipt", "paramCardPayment"]
+  purchase: {
+    base: ["优先检查采购草稿并提交审批。", "付款后刷新应付与凭证，确认状态同步。"],
+    withCounters: ({ apOpen }) => (apOpen > 0 ? [`有 ${apOpen} 条应付未付，建议安排付款。`] : [])
+  },
+  finance: {
+    base: ["先处理待审批单据，再执行收付款。", "重点核对应收/应付未清金额和凭证是否一致。"],
+    withCounters: () => []
+  },
+  warehouse: {
+    base: ["优先核对库存与商品主数据，处理异常数量。", "配合业务单据执行后，及时刷新库存与趋势。"],
+    withCounters: () => []
+  },
+  admin: {
+    base: ["先查看我的待审批列表，处理已提交单据。", "抽查应收/应付与凭证一致性，关注异常。"],
+    withCounters: () => []
   }
 };
 const pagerState = {
@@ -441,6 +467,21 @@ function restoreCurrentPanel() {
   }
 }
 
+function formatDateTimeShort(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw || raw === "-") return "-";
+  // Accept common backend datetime strings: "YYYY-MM-DD HH:mm:ss" / ISO
+  const normalized = raw.includes("T") ? raw : raw.replace(" ", "T");
+  const d = new Date(normalized);
+  if (Number.isNaN(d.getTime())) return raw;
+  const yyyy = String(d.getFullYear());
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mi = String(d.getMinutes()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
+}
+
 function renderTable(target, rows, columns, opts = {}) {
   let dataRows = rows || [];
   const totalCount = dataRows.length;
@@ -454,11 +495,14 @@ function renderTable(target, rows, columns, opts = {}) {
   }
   const classifyHeader = (label) => {
     const text = String(label || "");
-    if (text === "选") return "th-check";
+    if (text === "选" || text === "批选") return "th-check";
     if (text === "ID") return "th-idcol";
     if (text === "单号") return "th-orderno";
+    if (text === "类型") return "th-type";
+    if (text === "供应商" || text === "客户") return "th-party";
     if (text === "阶段") return "th-stage";
     if (text === "状态") return "th-status";
+    if (text.includes("驳回")) return "th-reject";
     if (/(金额|借方|贷方|余额|成本|价格|数量|库存|openAmount|paid|received)/i.test(text)) return "th-amount";
     if (/(级别|动作|类型)/i.test(text)) return "th-status";
     if (/(时间|日期|created|submitted|approved)/i.test(text)) return "th-time";
@@ -467,11 +511,14 @@ function renderTable(target, rows, columns, opts = {}) {
   };
   const classifyCell = (label) => {
     const text = String(label || "");
-    if (text === "选") return "td-check";
+    if (text === "选" || text === "批选") return "td-check";
     if (text === "ID") return "td-idcol";
     if (text === "单号") return "td-orderno";
+    if (text === "类型") return "td-type";
+    if (text === "供应商" || text === "客户") return "td-party";
     if (text === "阶段") return "td-stage";
     if (text === "状态") return "td-status";
+    if (text.includes("驳回")) return "td-reject";
     if (/(金额|借方|贷方|余额|成本|价格|数量|库存|openAmount|paid|received)/i.test(text)) return "td-amount";
     if (/(时间|日期|created|submitted|approved)/i.test(text)) return "td-time";
     return "";
@@ -488,7 +535,12 @@ function renderTable(target, rows, columns, opts = {}) {
     .map((row, idx) => {
       const cells = columns
         .map((c, colIdx) => {
-          const v = c.getter(row);
+          const colType = classifyCell(c.label);
+          const raw = c.getter(row);
+          const v =
+            colType === "td-time" && (typeof raw === "string" || typeof raw === "number")
+              ? `<span title="${escapeHtml(String(raw ?? "-"))}">${escapeHtml(formatDateTimeShort(raw))}</span>`
+              : raw;
           const base = [colIdx === 0 && stickyFirstCol ? "first-col" : "", classifyCell(c.label)].filter(Boolean).join(" ");
           const cls = base ? ` class="${base}"` : "";
           return `<td${cls}>${v == null ? "" : String(v)}</td>`;
@@ -597,11 +649,21 @@ function zhApprovalRowStatus(row) {
   return zhOrderStatus(status);
 }
 
+function approvalStatusBadgeHtml(statusRaw) {
+  const st = String(statusRaw || "").toLowerCase();
+  const text = zhOrderStatus(st);
+  let cls = "badge badge-muted";
+  if (st === "draft") cls = "badge badge-muted";
+  else if (st === "submitted") cls = "badge badge-info";
+  else if (st === "approved") cls = "badge badge-ok";
+  else if (st === "rejected") cls = "badge badge-danger";
+  else if (st === "voided") cls = "badge badge-muted";
+  else if (st === "reversed") cls = "badge badge-danger";
+  return `<span class="${cls}" title="${escapeHtml(text)}">${escapeHtml(text)}</span>`;
+}
+
 function formatApprovalStatusCell(row) {
-  const statusText = zhApprovalRowStatus(row);
-  const isRejected = String(row?.status || "") === "rejected";
-  if (!isRejected) return statusText;
-  return `<span style="color:var(--danger);font-weight:700;" title="该单据已驳回">${escapeHtml(statusText)}</span>`;
+  return approvalStatusBadgeHtml(row?.status);
 }
 
 function fmtMoney(n) {
@@ -898,8 +960,8 @@ function renderApprovalDetailHtml(orderType, data, rejectMeta = null) {
 async function jumpFromApprovalDetail(kind, orderType, orderId, orderNo = "") {
   try {
     if (kind === "exec") {
-      setActivePanel("panelCreate");
-      // execution section is in create panel; prefill ids and refresh picks
+      setActivePanel(orderType === "sales" ? "panelSalesExec" : "panelPurchaseExec");
+      // execution section is split by order type; prefill ids and refresh picks
       if (orderType === "sales") {
         const pick = document.getElementById("execSalesOrderPick");
         const idInput = document.getElementById("execSalesOrderId");
@@ -924,7 +986,7 @@ async function jumpFromApprovalDetail(kind, orderType, orderId, orderNo = "") {
     }
 
     if (kind === "settle") {
-      setActivePanel("panelCreate");
+      setActivePanel("panelDocCreate");
       await refreshSettlementPicks();
       if (orderType === "sales") {
         // auto match AR invoice by refType/refId
@@ -1569,6 +1631,11 @@ function syncApprovalSelectedIdHint() {
   hint.textContent = id ? `当前单据：#${id}` : "当前单据：未选中";
 }
 
+function normalizeRoleKey(role) {
+  const key = String(role || "").trim();
+  return ROLE_ALIAS[key] || key || "admin";
+}
+
 function renderRoleTodoFocus() {
   if (!roleTodoList || !roleTodoHint) return;
   if (!state.token) {
@@ -1579,27 +1646,11 @@ function renderRoleTodoFocus() {
   const pendingSubmitted = (approvalRowsCache || []).filter((r) => String(r.status || "").toLowerCase() === "submitted").length;
   const arOpen = (cache.ar || []).filter((r) => Number(r.openAmount || (Number(r.totalAmount || 0) - Number(r.receivedAmount || 0))) > 0).length;
   const apOpen = (cache.ap || []).filter((r) => Number(r.openAmount || (Number(r.totalAmount || 0) - Number(r.paidAmount || 0))) > 0).length;
-  const todos = [];
-  if (state.role === "sales") {
-    todos.push("优先检查销售草稿并提交审批。");
-    if (arOpen > 0) todos.push(`有 ${arOpen} 条应收未收，建议跟进收款。`);
-    todos.push("收款后刷新应收与凭证，确认状态同步。");
-  } else if (state.role === "purchase") {
-    todos.push("优先检查采购草稿并提交审批。");
-    if (apOpen > 0) todos.push(`有 ${apOpen} 条应付未付，建议安排付款。`);
-    todos.push("付款后刷新应付与凭证，确认状态同步。");
-  } else if (state.role === "finance") {
-    todos.push("先处理待审批单据，再执行收付款。");
-    todos.push("重点核对应收/应付未清金额和凭证是否一致。");
-  } else if (state.role === "warehouse") {
-    todos.push("优先核对库存与商品主数据，处理异常数量。");
-    todos.push("配合业务单据执行后，及时刷新库存与趋势。");
-  } else {
-    todos.push("先查看我的待审批列表，处理已提交单据。");
-    todos.push("抽查应收/应付与凭证一致性，关注异常。");
-  }
+  const roleKey = normalizeRoleKey(state.role);
+  const cfg = roleTodoConfig[roleKey] || roleTodoConfig.admin;
+  const todos = [...(cfg.base || []), ...((cfg.withCounters && cfg.withCounters({ arOpen, apOpen })) || [])];
   if (pendingSubmitted > 0) todos.unshift(`当前有 ${pendingSubmitted} 条已提交单据待处理。`);
-  roleTodoHint.textContent = `当前角色：${zhRole(state.role)}（动态建议）`;
+  roleTodoHint.textContent = `当前角色：${zhRole(roleKey)}（动态建议）`;
   roleTodoList.innerHTML = todos.slice(0, 4).map((t) => `<li>${t}</li>`).join("");
 }
 
@@ -1709,6 +1760,22 @@ function supplierDisplayShortById(id) {
   return ellipsisText(full, 18);
 }
 
+function customerDisplayById(id) {
+  const n = Number(id || 0);
+  if (!(n > 0)) return "-";
+  const hit = (masterPickCache.customers || []).find((c) => Number(c.id || 0) === n);
+  if (!hit) return `#${n}`;
+  const name = String(hit.name || "").trim();
+  const code = String(hit.code || "").trim();
+  if (name && code) return `${name}（${code}） (#${n})`;
+  return `${name || code || `#${n}`} (#${n})`;
+}
+
+function customerDisplayShortById(id) {
+  const full = customerDisplayById(id);
+  return ellipsisText(full, 18);
+}
+
 function getFilteredApprovalRows(rows) {
   const status = approvalStatusFilterValue();
   const stage = approvalStageFilterValue();
@@ -1758,7 +1825,7 @@ function renderApprovalTableFromCache() {
       tableTargets.approval,
       rows,
       [
-        { label: "选", getter: (r) => approvalCheckCell(r) },
+        { label: "批选", getter: (r) => approvalCheckCell(r) },
         { label: "类型", getter: (r) => zhOrderType(r.orderType) },
         { label: "ID", getter: (r) => r.id },
         { label: "单号", getter: (r) => `<span title="${escapeHtml(r.orderNo || "-")}">${escapeHtml(r.orderNo || "-")}</span>` },
@@ -1808,10 +1875,17 @@ function renderApprovalTableFromCache() {
       tableTargets.approval,
       rows,
       [
-        { label: "选", getter: (r) => approvalCheckCell(r) },
+        { label: "批选", getter: (r) => approvalCheckCell(r) },
         { label: "ID", getter: (r) => r.id },
         { label: "单号", getter: (r) => `<span title="${escapeHtml(r.orderNo || "-")}">${escapeHtml(r.orderNo || "-")}</span>` },
-        { label: "客户", getter: (r) => r.customerId },
+        {
+          label: "客户",
+          getter: (r) => {
+            const full = customerDisplayById(r.customerId);
+            const short = customerDisplayShortById(r.customerId);
+            return `<span title="${escapeHtml(full)}">${escapeHtml(short)}</span>`;
+          }
+        },
         {
           label: "阶段",
           getter: (r) => {
@@ -1845,7 +1919,7 @@ function renderApprovalTableFromCache() {
     tableTargets.approval,
     rows,
     [
-      { label: "选", getter: (r) => approvalCheckCell(r) },
+      { label: "批选", getter: (r) => approvalCheckCell(r) },
       { label: "ID", getter: (r) => r.id },
       { label: "单号", getter: (r) => `<span title="${escapeHtml(r.orderNo || "-")}">${escapeHtml(r.orderNo || "-")}</span>` },
       {
@@ -2079,6 +2153,7 @@ function applyRoleUi() {
     ["btnBizPurchase", "purchase:write"],
     ["btnBizSales", "sales:write"],
     ["btnBizAddProduct", ["stock:write", "product:write"]],
+    ["btnBizWarehouseLocation", "stock:write"],
     ["btnConfirmPurchase", "purchase:write"],
     ["btnConfirmSales", "sales:write"],
     ["btnConfirmReceipt", "sales:write"],
@@ -2119,6 +2194,7 @@ function applyRoleUi() {
   // 正式用户区：按权限最小化显示按钮，避免“看得到但用不了”的噪音。
   const bizVisibleByPerm = [
     ["btnBizAddProduct", ["stock:write", "product:write"]],
+    ["btnBizWarehouseLocation", "stock:write"],
     ["btnBizPurchase", "purchase:write"],
     ["btnBizSales", "sales:write"],
     ["btnBizPending", ["purchase:approve", "sales:approve"]],
@@ -2135,7 +2211,8 @@ function applyRoleUi() {
     el.style.display = ok ? "" : "none";
   });
   const navVisibleByPerm = [
-    ["navCreate", ["purchase:write", "sales:write", "stock:write", "product:write"]],
+    ["navProductCreate", ["stock:write", "product:write"]],
+    ["navDocCreate", ["purchase:write", "sales:write"]],
     ["navApproval", ["purchase:read", "sales:read", "purchase:approve", "sales:approve"]],
     ["navAr", "sales:read"],
     ["navAp", "purchase:read"],
@@ -2155,7 +2232,7 @@ function applyRoleUi() {
   const bizActionsGroup = document.getElementById("bizActionsGroup");
   const canCreateOrder = hasPermission("purchase:write") || hasPermission("sales:write");
   if (bizParamsGroup) bizParamsGroup.style.display = canCreateOrder ? "" : "none";
-  const hasVisibleBizAction = ["btnBizAddProduct", "btnBizPurchase", "btnBizSales", "btnBizPending", "btnBizSubmit", "btnBizApprove", "btnBizReceipt", "btnBizPayment", "btnBizRefresh"].some((id) => {
+  const hasVisibleBizAction = ["btnBizAddProduct", "btnBizWarehouseLocation", "btnBizPurchase", "btnBizSales", "btnBizPending", "btnBizSubmit", "btnBizApprove", "btnBizReceipt", "btnBizPayment", "btnBizRefresh"].some((id) => {
     const el = document.getElementById(id);
     return el && el.style.display !== "none";
   });
@@ -2168,7 +2245,7 @@ function applyRoleUi() {
   const panelId = Object.entries(panels).find(([, panel]) => panel.classList.contains("active"))?.[0] || "panelProducts";
   syncBizParamsHint(panelId);
   if (bizParamsWorkbench) {
-    bizParamsWorkbench.style.display = canCreateOrder && panelId === "panelCreate" ? "" : "none";
+    bizParamsWorkbench.style.display = canCreateOrder && panelId === "panelDocCreate" ? "" : "none";
   }
   applyRolePreferredBizButtons();
   applyRolePreferredParamCards();
@@ -2413,6 +2490,7 @@ async function refreshExecutionPicks() {
     const salesLocationPick = document.getElementById("execSalesLocationPick");
     executionOrderCache.purchase = (poRows || []).filter((x) => x.status === "approved" && Number(x.remainingQty ?? 0) > 0.0001);
     executionOrderCache.sales = (soRows || []).filter((x) => x.status === "approved" && Number(x.remainingQty ?? 0) > 0.0001);
+    renderExecutionTodoHint();
     if (purchaseWarehousePick) {
       const opts = ['<option value="">仓库（可选）</option>'];
       (warehouses || []).forEach((w) => opts.push(`<option value="${w.id}">${w.code} ${w.name}</option>`));
@@ -2472,6 +2550,21 @@ async function refreshExecutionPicks() {
   } catch (_e) {
     // ignore by permission
   }
+}
+
+function renderExecutionTodoHint() {
+  const purchaseHint = document.getElementById("execPurchaseTodoHint");
+  const salesHint = document.getElementById("execSalesTodoHint");
+
+  const summarize = (rows = [], label) => {
+    const orderCount = rows.length;
+    const totalRemaining = rows.reduce((sum, row) => sum + Number(row.remainingQty || 0), 0);
+    if (!orderCount) return `待执行：当前无${label}订单。`;
+    return `待执行：${orderCount} 单待处理，合计剩余数量 ${fmtMoney(totalRemaining)}。`;
+  };
+
+  if (purchaseHint) purchaseHint.textContent = summarize(executionOrderCache.purchase || [], "采购");
+  if (salesHint) salesHint.textContent = summarize(executionOrderCache.sales || [], "销售");
 }
 
 async function createWarehouseFromForm() {
@@ -4227,14 +4320,10 @@ async function runAll() {
 function setActivePanel(panelId) {
   const appShell = document.getElementById("appShell");
   if (appShell) {
-    const formPanels = new Set(["panelCreate", "panelTrend"]);
+    const formPanels = new Set(["panelProductCreate", "panelDocCreate", "panelPurchaseExec", "panelSalesExec", "panelTrend"]);
     const mode = formPanels.has(panelId) ? "form" : "table";
     appShell.classList.toggle("mode-form", mode === "form");
     appShell.classList.toggle("mode-table", mode === "table");
-  }
-  const mainWorkspaceCard = document.getElementById("mainWorkspaceCard");
-  if (mainWorkspaceCard) {
-    mainWorkspaceCard.style.display = panelId === "panelCreate" ? "" : "none";
   }
   tabButtons.forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.panel === panelId);
@@ -4249,7 +4338,7 @@ function setActivePanel(panelId) {
   persistCurrentPanel(panelId);
   if (bizParamsWorkbench) {
     const canUseParams = hasPermission("purchase:write") || hasPermission("sales:write");
-    const shouldShow = canUseParams && panelId === "panelCreate";
+    const shouldShow = canUseParams && panelId === "panelDocCreate";
     bizParamsWorkbench.style.display = shouldShow ? "" : "none";
   }
   syncBizParamsHint(panelId);
@@ -4263,13 +4352,14 @@ function getFirstVisibleNavPanel() {
 }
 
 function getRolePreset() {
-  return roleWorkspacePreset[state.role] || roleWorkspacePreset.admin;
+  const roleKey = normalizeRoleKey(state.role);
+  return roleWorkspacePreset[roleKey] || roleWorkspacePreset.admin;
 }
 
 function applyRolePreferredBizButtons() {
   const preset = getRolePreset();
   const preferred = new Set(preset.preferredBizButtons || []);
-  const createButtonIds = ["btnBizAddProduct", "btnBizPurchase", "btnBizSales", "btnBizReceipt", "btnBizPayment"];
+  const createButtonIds = ["btnBizAddProduct", "btnBizWarehouseLocation", "btnBizPurchase", "btnBizSales", "btnBizReceipt", "btnBizPayment"];
   const approvalButtonIds = ["btnBizPending", "btnBizSubmit", "btnBizApprove", "btnBizRefresh"];
   const bizActionButtons = document.getElementById("bizActionButtons");
   if (bizActionButtons) {
@@ -4332,7 +4422,7 @@ function applyRolePreferredParamCards() {
 
 function syncBizParamsHint(panelId) {
   if (!bizParamsHint) return;
-  const text = panelId === "panelCreate" ? "填写参数后点击确定创建单据" : "";
+  const text = panelId === "panelDocCreate" ? "填写参数后点击确定创建单据" : "";
   bizParamsHint.textContent = text;
 }
 
@@ -4476,16 +4566,23 @@ bind("btnReverseApproval", async () => doApprovalAction("reverse"));
 bind("btnJumpAbnormal", jumpToAbnormalReason);
 bind("btnCopyApprovalDetailCurl", async () => copyApprovalDetailCurl());
 bind("btnBizPurchase", async () => {
-  setActivePanel("panelCreate");
+  setActivePanel("panelDocCreate");
   openParamWorkbenchFor("paramCardPurchase", "poOrderNo");
 });
 bind("btnBizAddProduct", async () => {
-  setActivePanel("panelCreate");
+  setActivePanel("panelProductCreate");
   const sku = document.getElementById("newProductSku");
   if (sku) sku.focus();
 });
+bind("btnBizWarehouseLocation", async () => {
+  setActivePanel("panelProductCreate");
+  const section = document.getElementById("sectionWarehouseLocation");
+  if (section && section.scrollIntoView) section.scrollIntoView({ behavior: "smooth", block: "start" });
+  const whCode = document.getElementById("newWarehouseCode");
+  if (whCode) whCode.focus();
+});
 bind("btnBizSales", async () => {
-  setActivePanel("panelCreate");
+  setActivePanel("panelDocCreate");
   openParamWorkbenchFor("paramCardSales", "soOrderNo");
 });
 bind("btnBizPending", async () => {
@@ -4501,11 +4598,11 @@ bind("btnBizApprove", async () => {
   await doApprovalAction("approve");
 });
 bind("btnBizReceipt", async () => {
-  setActivePanel("panelCreate");
+  setActivePanel("panelDocCreate");
   openParamWorkbenchFor("paramCardReceipt", "rcNo");
 });
 bind("btnBizPayment", async () => {
-  setActivePanel("panelCreate");
+  setActivePanel("panelDocCreate");
   openParamWorkbenchFor("paramCardPayment", "pyNo");
 });
 bind("btnBizRefresh", refreshAll);
