@@ -212,6 +212,17 @@
         height: 36px;
         white-space: nowrap;
       }
+      .exec-quick-picks {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 8px;
+      }
+      .exec-quick-picks .exec-quick-btn {
+        min-height: 30px;
+        padding: 6px 8px;
+        font-size: 12px;
+      }
       /* 宽屏：采购/销售执行保持单行（不换行） */
       @media (min-width: 1200px) {
         .exec-row {
@@ -1909,6 +1920,7 @@
                 <h3 class="section-title">采购执行（收货 / 退货）</h3>
                 <div class="muted" style="margin-bottom:6px;">按已审批采购订单执行收货/退货，库存与凭证将实时联动。</div>
                 <div id="execPurchaseTodoHint" class="ops-note muted" style="margin-bottom:8px;">待执行：加载中...</div>
+                <div id="execPurchaseQuickPicks" class="exec-quick-picks"></div>
                 <div class="row exec-row" style="margin-top:6px;">
                   <select id="execPurchaseOrderPick"><option value="">选择已审批采购订单</option></select>
                   <input id="execPurchaseOrderId" type="number" min="1" placeholder="采购订单ID" />
@@ -1931,6 +1943,7 @@
                 <h3 class="section-title">销售执行（发货 / 退货）</h3>
                 <div class="muted" style="margin-bottom:6px;">按已审批销售订单执行发货/退货，库存与应收口径同步更新。</div>
                 <div id="execSalesTodoHint" class="ops-note muted" style="margin-bottom:8px;">待执行：加载中...</div>
+                <div id="execSalesQuickPicks" class="exec-quick-picks"></div>
                 <div class="row exec-row" style="margin-top:6px;">
                   <select id="execSalesOrderPick"><option value="">选择已审批销售订单</option></select>
                   <input id="execSalesOrderId" type="number" min="1" placeholder="销售订单ID" />
@@ -2000,6 +2013,21 @@
                   <label class="muted" style="display:flex;align-items:center;gap:6px;">
                     <input id="chkApprovalActionableOnly" type="checkbox" />
                     <span>只看我可操作</span>
+                  </label>
+                </div>
+                <div class="approval-row" style="align-items:center;">
+                  <span class="row-title">列</span>
+                  <label class="muted" style="display:flex;align-items:center;gap:6px;">
+                    <input id="chkApprovalColAmount" type="checkbox" checked />
+                    <span>金额</span>
+                  </label>
+                  <label class="muted" style="display:flex;align-items:center;gap:6px;">
+                    <input id="chkApprovalColTime" type="checkbox" checked />
+                    <span>时间</span>
+                  </label>
+                  <label class="muted" style="display:flex;align-items:center;gap:6px;">
+                    <input id="chkApprovalColReject" type="checkbox" checked />
+                    <span>驳回意见</span>
                   </label>
                 </div>
                 <div class="approval-row approval-batch-row" style="align-items:flex-end;">

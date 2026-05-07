@@ -13,6 +13,7 @@ const state = {
 const STORAGE_SESSION_KEY = "gbf_erp_session_v1";
 const STORAGE_PANEL_KEY = "gbf_erp_panel_v1";
 const STORAGE_PAGER_PREF_KEY = "gbf_erp_pager_pref_v1";
+const STORAGE_APPROVAL_COL_PREF_KEY = "gbf_erp_approval_col_pref_v1";
 
 const output = document.getElementById("output");
 const loginStatus = document.getElementById("loginStatus");
@@ -182,6 +183,36 @@ function savePagerPrefs() {
         apPageSize: serverPager.ap.pageSize,
         remindReceiptsPageSize: serverPager.remindReceipts.pageSize,
         remindDeliveriesPageSize: serverPager.remindDeliveries.pageSize
+      })
+    );
+  } catch (_e) {
+    // ignore
+  }
+}
+
+function loadApprovalColumnPrefs() {
+  const defaults = { amount: true, time: true, reject: true };
+  try {
+    const raw = localStorage.getItem(STORAGE_APPROVAL_COL_PREF_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return {
+      amount: parsed.amount !== false,
+      time: parsed.time !== false,
+      reject: parsed.reject !== false
+    };
+  } catch (_e) {
+    return defaults;
+  }
+}
+
+function saveApprovalColumnPrefs(prefs) {
+  try {
+    localStorage.setItem(
+      STORAGE_APPROVAL_COL_PREF_KEY,
+      JSON.stringify({
+        amount: prefs.amount !== false,
+        time: prefs.time !== false,
+        reject: prefs.reject !== false
       })
     );
   } catch (_e) {
@@ -1818,13 +1849,27 @@ function getFilteredApprovalRows(rows) {
   return filtered;
 }
 
+function isApprovalColumnVisible(label) {
+  const amountOn = document.getElementById("chkApprovalColAmount")?.checked !== false;
+  const timeOn = document.getElementById("chkApprovalColTime")?.checked !== false;
+  const rejectOn = document.getElementById("chkApprovalColReject")?.checked !== false;
+  if (label === "金额") return amountOn;
+  if (label === "创建时间" || label === "提交时间") return timeOn;
+  if (label === "最近驳回意见") return rejectOn;
+  return true;
+}
+
+function filterApprovalColumns(columns) {
+  return (columns || []).filter((c) => isApprovalColumnVisible(c.label));
+}
+
 function renderApprovalTableFromCache() {
   const rows = getFilteredApprovalRows(approvalRowsCache || []);
   if (approvalRowsKind === "pending") {
     renderTable(
       tableTargets.approval,
       rows,
-      [
+      filterApprovalColumns([
         { label: "批选", getter: (r) => approvalCheckCell(r) },
         { label: "类型", getter: (r) => zhOrderType(r.orderType) },
         { label: "ID", getter: (r) => r.id },
@@ -1859,7 +1904,7 @@ function renderApprovalTableFromCache() {
         { label: "金额", getter: (r) => r.totalAmount },
         { label: "提交时间", getter: (r) => r.submittedAt || "-" },
         { label: "最近驳回意见", getter: (r) => formatRejectSummaryCell(r) }
-      ],
+      ]),
       {
         clickable: true,
         onRowClick: (row) => selectApprovalRow(row.orderType || approvalType, row),
@@ -1874,7 +1919,7 @@ function renderApprovalTableFromCache() {
     renderTable(
       tableTargets.approval,
       rows,
-      [
+      filterApprovalColumns([
         { label: "批选", getter: (r) => approvalCheckCell(r) },
         { label: "ID", getter: (r) => r.id },
         { label: "单号", getter: (r) => `<span title="${escapeHtml(r.orderNo || "-")}">${escapeHtml(r.orderNo || "-")}</span>` },
@@ -1904,7 +1949,7 @@ function renderApprovalTableFromCache() {
         { label: "金额", getter: (r) => r.totalAmount },
         { label: "创建时间", getter: (r) => r.createdAt },
         { label: "最近驳回意见", getter: (r) => formatRejectSummaryCell(r) }
-      ],
+      ]),
       {
         clickable: true,
         onRowClick: (row) => selectApprovalRow("sales", row),
@@ -1918,7 +1963,7 @@ function renderApprovalTableFromCache() {
   renderTable(
     tableTargets.approval,
     rows,
-    [
+    filterApprovalColumns([
       { label: "批选", getter: (r) => approvalCheckCell(r) },
       { label: "ID", getter: (r) => r.id },
       { label: "单号", getter: (r) => `<span title="${escapeHtml(r.orderNo || "-")}">${escapeHtml(r.orderNo || "-")}</span>` },
@@ -1948,7 +1993,7 @@ function renderApprovalTableFromCache() {
       { label: "金额", getter: (r) => r.totalAmount },
       { label: "创建时间", getter: (r) => r.createdAt },
       { label: "最近驳回意见", getter: (r) => formatRejectSummaryCell(r) }
-    ],
+    ]),
     {
       clickable: true,
       onRowClick: (row) => selectApprovalRow("purchase", row),
@@ -2491,6 +2536,8 @@ async function refreshExecutionPicks() {
     executionOrderCache.purchase = (poRows || []).filter((x) => x.status === "approved" && Number(x.remainingQty ?? 0) > 0.0001);
     executionOrderCache.sales = (soRows || []).filter((x) => x.status === "approved" && Number(x.remainingQty ?? 0) > 0.0001);
     renderExecutionTodoHint();
+    renderExecutionQuickPicks("purchase");
+    renderExecutionQuickPicks("sales");
     if (purchaseWarehousePick) {
       const opts = ['<option value="">仓库（可选）</option>'];
       (warehouses || []).forEach((w) => opts.push(`<option value="${w.id}">${w.code} ${w.name}</option>`));
@@ -2565,6 +2612,49 @@ function renderExecutionTodoHint() {
 
   if (purchaseHint) purchaseHint.textContent = summarize(executionOrderCache.purchase || [], "采购");
   if (salesHint) salesHint.textContent = summarize(executionOrderCache.sales || [], "销售");
+}
+
+function renderExecutionQuickPicks(type) {
+  const boxId = type === "sales" ? "execSalesQuickPicks" : "execPurchaseQuickPicks";
+  const box = document.getElementById(boxId);
+  if (!box) return;
+  const rows = [...(type === "sales" ? executionOrderCache.sales : executionOrderCache.purchase)];
+  const top = rows
+    .sort((a, b) => Number(b.remainingQty || 0) - Number(a.remainingQty || 0))
+    .slice(0, 3);
+  if (!top.length) {
+    box.innerHTML = `<span class="muted">暂无待执行快捷单。</span>`;
+    return;
+  }
+  box.innerHTML = top
+    .map(
+      (r) =>
+        `<button type="button" class="secondary exec-quick-btn" data-order-type="${escapeHtml(type)}" data-order-id="${Number(
+          r.id || 0
+        )}" title="${escapeHtml(`${r.orderNo || `#${r.id}`} / 剩余 ${fmtMoney(Number(r.remainingQty || 0))}`)}">${escapeHtml(
+          `${r.orderNo || `#${r.id}`} · 剩余${fmtMoney(Number(r.remainingQty || 0))}`
+        )}</button>`
+    )
+    .join("");
+}
+
+async function onClickExecutionQuickPick(evt) {
+  const btn = evt.target?.closest?.(".exec-quick-btn");
+  if (!btn) return;
+  evt.preventDefault();
+  const type = String(btn.getAttribute("data-order-type") || "");
+  const orderId = Number(btn.getAttribute("data-order-id") || 0);
+  if (!(orderId > 0) || (type !== "purchase" && type !== "sales")) return;
+  const pickId = type === "sales" ? "execSalesOrderPick" : "execPurchaseOrderPick";
+  const inputId = type === "sales" ? "execSalesOrderId" : "execPurchaseOrderId";
+  const qtyId = type === "sales" ? "execSalesQty" : "execPurchaseQty";
+  const pick = document.getElementById(pickId);
+  const input = document.getElementById(inputId);
+  if (pick) pick.value = String(orderId);
+  if (input) input.value = String(orderId);
+  await applyExecutionOrderSelection(type, orderId);
+  const qty = document.getElementById(qtyId);
+  if (qty) qty.focus();
 }
 
 async function createWarehouseFromForm() {
@@ -2740,39 +2830,125 @@ async function applyExecutionOrderSelection(orderType, orderId) {
   void validateExecutionQty(orderType);
 }
 
+function getProductStockQty(productId) {
+  const id = Number(productId || 0);
+  if (!(id > 0)) return null;
+  const row = (cache.products || []).find((x) => Number(x.id || 0) === id);
+  if (!row) return null;
+  return Number(row.stockQty || 0);
+}
+
+function buildExecutionCapability(orderType, item) {
+  const qty = Number(item?.qty || 0);
+  const delivered = Number(item?.deliveredQty || 0);
+  const received = Number(item?.receivedQty || 0);
+  const remaining =
+    Number(
+      item?.remainingQty ?? (orderType === "sales" ? Number(item?.qty || 0) - delivered : Number(item?.qty || 0) - received)
+    ) || 0;
+  if (orderType === "sales") {
+    return {
+      canPrimary: Math.max(0, remaining), // 发货
+      canReverse: Math.max(0, delivered), // 退货
+      primaryName: "发货",
+      reverseName: "退货"
+    };
+  }
+  return {
+    canPrimary: Math.max(0, remaining), // 收货
+    canReverse: Math.max(0, received), // 退货
+    primaryName: "收货",
+    reverseName: "退货"
+  };
+}
+
+function setExecutionButtonsEnabled(orderType, primaryEnabled, reverseEnabled) {
+  const primaryId = orderType === "sales" ? "btnCreateDeliveryFlow" : "btnCreateReceiptFlow";
+  const reverseId = orderType === "sales" ? "btnCreateSalesReturnFlow" : "btnCreatePurchaseReturnFlow";
+  const btnPrimary = document.getElementById(primaryId);
+  const btnReverse = document.getElementById(reverseId);
+  if (btnPrimary) btnPrimary.disabled = !primaryEnabled;
+  if (btnReverse) btnReverse.disabled = !reverseEnabled;
+}
+
 async function validateExecutionQty(orderType) {
   try {
     const orderId = Number(inputNum(orderType === "sales" ? "execSalesOrderId" : "execPurchaseOrderId") || 0);
     const productId = Number(selectNum(orderType === "sales" ? "execSalesProductPick" : "execPurchaseProductPick") || 0);
     const qty = Number(inputNum(orderType === "sales" ? "execSalesQty" : "execPurchaseQty") || 0);
     const feedbackId = orderType === "sales" ? "execSalesFeedback" : "execPurchaseFeedback";
-    const btnIds =
-      orderType === "sales" ? ["btnCreateDeliveryFlow", "btnCreateSalesReturnFlow"] : ["btnCreateReceiptFlow", "btnCreatePurchaseReturnFlow"];
     if (!orderId || !productId || !(qty > 0)) {
-      btnIds.forEach((id) => {
-        const btn = document.getElementById(id);
-        if (btn) btn.disabled = false;
-      });
+      setExecutionButtonsEnabled(orderType, true, true);
       return true;
     }
     const items = await loadExecutionOrderItems(orderType, orderId);
     const item = (items || []).find((x) => Number(x.productId || 0) === productId);
-    const remaining = Number(
-      item?.remainingQty ?? (Number(item?.qty || 0) - Number(orderType === "sales" ? item?.deliveredQty || 0 : item?.receivedQty || 0))
-    );
-    const ok = qty <= remaining + 0.0001;
-    btnIds.forEach((id) => {
-      const btn = document.getElementById(id);
-      if (btn) btn.disabled = !ok;
-    });
-    if (!ok) {
-      showInlineFeedback(feedbackId, "error", `数量超出剩余可执行：${qty} > ${Math.max(0, remaining).toFixed(2)}`);
+    if (!item) {
+      setExecutionButtonsEnabled(orderType, false, false);
+      showInlineFeedback(feedbackId, "error", "所选商品不在该订单明细中，请重新选择。");
+      return false;
+    }
+
+    const capability = buildExecutionCapability(orderType, item);
+    const stockQty = getProductStockQty(productId);
+    const primaryOkByQty = qty <= capability.canPrimary + 0.0001;
+    const reverseOkByQty = qty <= capability.canReverse + 0.0001;
+    const primaryStockOk = orderType === "sales" ? stockQty == null || qty <= stockQty + 0.0001 : true;
+    const reverseStockOk = orderType === "purchase" ? stockQty == null || qty <= stockQty + 0.0001 : true;
+    const primaryEnabled = primaryOkByQty && primaryStockOk;
+    const reverseEnabled = reverseOkByQty && reverseStockOk;
+    setExecutionButtonsEnabled(orderType, primaryEnabled, reverseEnabled);
+
+    if (!primaryEnabled && !reverseEnabled) {
+      const reasons = [];
+      if (!primaryOkByQty) reasons.push(`${capability.primaryName}上限 ${capability.canPrimary.toFixed(2)}`);
+      if (!reverseOkByQty) reasons.push(`${capability.reverseName}上限 ${capability.canReverse.toFixed(2)}`);
+      if ((!primaryStockOk || !reverseStockOk) && stockQty != null) reasons.push(`可用库存 ${stockQty.toFixed(2)}`);
+      showInlineFeedback(feedbackId, "error", `当前数量不可执行：${reasons.join("，")}`);
+      return false;
     } else {
       clearInlineFeedback(feedbackId);
+      if (!primaryEnabled || !reverseEnabled) {
+        const tip = !primaryEnabled
+          ? `${capability.primaryName}受限，可执行上限 ${capability.canPrimary.toFixed(2)}`
+          : `${capability.reverseName}受限，可执行上限 ${capability.canReverse.toFixed(2)}`;
+        showInlineFeedback(feedbackId, "info", tip);
+      }
     }
-    return ok;
+    return true;
   } catch (_e) {
     return true;
+  }
+}
+
+async function prevalidateExecutionAction(orderType, action, payload) {
+  const orderId = Number(payload?.orderId || 0);
+  const item = payload?.items?.[0] || {};
+  const productId = Number(item.productId || 0);
+  const qty = Number(item.qty || 0);
+  if (!(orderId > 0) || !(productId > 0) || !(qty > 0)) throw new Error("执行参数无效：请填写订单、商品和数量。");
+
+  const cacheRows = orderType === "sales" ? executionOrderCache.sales : executionOrderCache.purchase;
+  const order = (cacheRows || []).find((x) => Number(x.id || 0) === orderId);
+  if (!order) throw new Error("订单不在当前可执行列表，请先刷新并重新选择。");
+  if (String(order.status || "").toLowerCase() !== "approved") throw new Error("订单未审批通过，暂不能执行。");
+
+  const items = await loadExecutionOrderItems(orderType, orderId);
+  const row = (items || []).find((x) => Number(x.productId || 0) === productId);
+  if (!row) throw new Error("所选商品不在订单明细中。");
+  const capability = buildExecutionCapability(orderType, row);
+    const stockQty = getProductStockQty(productId);
+
+    if (action === "primary") {
+    if (qty > capability.canPrimary + 0.0001) throw new Error(`数量超出可执行上限：${qty} > ${capability.canPrimary.toFixed(2)}`);
+      if (orderType === "sales" && stockQty != null && qty > stockQty + 0.0001) {
+      throw new Error(`库存不足：可用 ${stockQty.toFixed(2)}，请求 ${qty.toFixed(2)}`);
+    }
+  } else {
+    if (qty > capability.canReverse + 0.0001) throw new Error(`数量超出可退上限：${qty} > ${capability.canReverse.toFixed(2)}`);
+      if (orderType === "purchase" && stockQty != null && qty > stockQty + 0.0001) {
+      throw new Error(`库存不足（采购退货）：可用 ${stockQty.toFixed(2)}，请求 ${qty.toFixed(2)}`);
+    }
   }
 }
 
@@ -3312,6 +3488,7 @@ async function createPurchaseReceiptFlow() {
   try {
   ensureToken();
   const payload = readExecPayload("execPurchase");
+  await prevalidateExecutionAction("purchase", "primary", payload);
   const result = await api(`/api/purchase-orders/${payload.orderId}/receipts`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -3338,6 +3515,7 @@ async function createSalesDeliveryFlow() {
   try {
   ensureToken();
   const payload = readExecPayload("execSales");
+  await prevalidateExecutionAction("sales", "primary", payload);
   const result = await api(`/api/sales-orders/${payload.orderId}/deliveries`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -3364,6 +3542,7 @@ async function createPurchaseReturnFlow() {
   try {
   ensureToken();
   const payload = readExecPayload("execPurchase");
+  await prevalidateExecutionAction("purchase", "reverse", payload);
   const result = await api(`/api/purchase-orders/${payload.orderId}/returns`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -3390,6 +3569,7 @@ async function createSalesReturnFlow() {
   try {
   ensureToken();
   const payload = readExecPayload("execSales");
+  await prevalidateExecutionAction("sales", "reverse", payload);
   const result = await api(`/api/sales-orders/${payload.orderId}/returns`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -4016,8 +4196,8 @@ function renderProductsFromCache() {
       { label: "名称", getter: (r) => r.name },
       { label: "单位", getter: (r) => r.unit },
       { label: "库存", getter: (r) => r.stockQty },
-      { label: "成本价", getter: (r) => r.costPrice },
-      { label: "销售价", getter: (r) => r.salePrice }
+      { label: "成本价", getter: (r) => fmtMoney(r.costPrice) },
+      { label: "销售价", getter: (r) => fmtMoney(r.salePrice) }
     ],
     {
       clickable: true,
@@ -4698,8 +4878,8 @@ bind("btnExportProducts", async () => {
     { label: "名称", getter: (r) => r.name },
     { label: "单位", getter: (r) => r.unit },
     { label: "库存数量", getter: (r) => r.stockQty },
-    { label: "成本价", getter: (r) => r.costPrice },
-    { label: "销售价", getter: (r) => r.salePrice }
+    { label: "成本价", getter: (r) => fmtMoney(r.costPrice) },
+    { label: "销售价", getter: (r) => fmtMoney(r.salePrice) }
   ]);
 });
 bind("btnExportAr", async () => {
@@ -4858,6 +5038,33 @@ document.getElementById("approvalSort")?.addEventListener("change", () => {
 document.getElementById("approvalSearch")?.addEventListener("input", () => {
   renderApprovalTableFromCache();
 });
+document.getElementById("chkApprovalColAmount")?.addEventListener("change", () => {
+  const prefs = {
+    amount: document.getElementById("chkApprovalColAmount")?.checked !== false,
+    time: document.getElementById("chkApprovalColTime")?.checked !== false,
+    reject: document.getElementById("chkApprovalColReject")?.checked !== false
+  };
+  saveApprovalColumnPrefs(prefs);
+  renderApprovalTableFromCache();
+});
+document.getElementById("chkApprovalColTime")?.addEventListener("change", () => {
+  const prefs = {
+    amount: document.getElementById("chkApprovalColAmount")?.checked !== false,
+    time: document.getElementById("chkApprovalColTime")?.checked !== false,
+    reject: document.getElementById("chkApprovalColReject")?.checked !== false
+  };
+  saveApprovalColumnPrefs(prefs);
+  renderApprovalTableFromCache();
+});
+document.getElementById("chkApprovalColReject")?.addEventListener("change", () => {
+  const prefs = {
+    amount: document.getElementById("chkApprovalColAmount")?.checked !== false,
+    time: document.getElementById("chkApprovalColTime")?.checked !== false,
+    reject: document.getElementById("chkApprovalColReject")?.checked !== false
+  };
+  saveApprovalColumnPrefs(prefs);
+  renderApprovalTableFromCache();
+});
 document.getElementById("arStageFilter")?.addEventListener("change", () => {
   renderArFromCache();
 });
@@ -4875,6 +5082,12 @@ document.getElementById("sortRemindReceipts")?.addEventListener("change", () => 
 });
 document.getElementById("sortRemindDeliveries")?.addEventListener("change", () => {
   renderRemindersTable("remindDeliveriesTable", reminderCache.deliveries || [], "催发货列表");
+});
+document.getElementById("execPurchaseQuickPicks")?.addEventListener("click", (e) => {
+  void onClickExecutionQuickPick(e);
+});
+document.getElementById("execSalesQuickPicks")?.addEventListener("click", (e) => {
+  void onClickExecutionQuickPick(e);
 });
 document.getElementById("remindWarnDays")?.addEventListener("input", () => {
   const preset = document.getElementById("remindRulePreset");
@@ -5232,6 +5445,13 @@ serverPager.ap.pageSize = pagerPrefs.apPageSize;
 serverPager.remindReceipts.pageSize = pagerPrefs.remindReceiptsPageSize;
 serverPager.remindDeliveries.pageSize = pagerPrefs.remindDeliveriesPageSize;
 initServerPagerUiDefaults();
+const approvalColPrefs = loadApprovalColumnPrefs();
+const chkApprovalColAmount = document.getElementById("chkApprovalColAmount");
+const chkApprovalColTime = document.getElementById("chkApprovalColTime");
+const chkApprovalColReject = document.getElementById("chkApprovalColReject");
+if (chkApprovalColAmount) chkApprovalColAmount.checked = approvalColPrefs.amount;
+if (chkApprovalColTime) chkApprovalColTime.checked = approvalColPrefs.time;
+if (chkApprovalColReject) chkApprovalColReject.checked = approvalColPrefs.reject;
 
 if (restoreSession()) {
   setAuthenticatedUi(true);
