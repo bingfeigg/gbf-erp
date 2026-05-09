@@ -6,7 +6,7 @@
 
 ## 文档
 
-补充说明与变更记录见 [`docs/`](./docs/)（例如 [CHANGELOG](./docs/CHANGELOG.md)、[前端回归冒烟清单](./docs/regression-smoke.md)）。
+补充说明（变更记录、界面冒烟清单等）见 **[`docs/`](./docs/)** 目录；入口说明见 [`docs/README.md`](./docs/README.md)。
 
 ## 环境要求
 

@@ -1,27 +1,32 @@
-# ERP Frontend Regression Smoke
+# 前端回归冒烟清单
 
-Run this quick checklist after UI changes:
+在完成控制台界面相关改动后，建议按下列顺序做一次快速验证：
 
-1. Approval workbench
-   - Load purchase/sales/pending views.
-   - Verify stage filter, status filter, search, and sort all work together.
-   - Use `填充当前筛选ID` and run batch approve/reject.
-   - Verify failed rows export `approval_batch_failures_*.csv`.
+## 1. 审批工作台
 
-2. Settlement linkage
-   - Receipt: select AR bill -> customer auto-fills -> amount auto-fills.
-   - Payment: select AP bill -> supplier auto-fills -> amount auto-fills.
-   - Change customer/supplier first and verify bill list is filtered.
+- 分别加载采购单列表、销售单列表、待我审批视图。
+- 确认阶段筛选、状态筛选、关键字搜索与排序可以同时生效、互不干扰。
+- 使用「填充当前筛选 ID」后执行批量通过 / 驳回。
+- 若有失败行，确认可导出 `approval_batch_failures_*.csv`。
 
-3. Execution guard
-   - Input qty greater than remaining in purchase/sales execution.
-   - Verify inline error appears and action buttons are disabled.
-   - Submit one execution action and verify duplicate-click is blocked while running.
+## 2. 收付款与单据联动
 
-4. Reminder panel
-   - Load reminder lists and switch sort mode.
-   - Change warn/danger day values and save.
-   - Refresh page and verify thresholds persist.
+- **收款**：选择应收单据后，客户是否自动带出；收款金额是否按未结余额自动填充。
+- **付款**：选择应付单据后，供应商是否自动带出；付款金额是否按未结余额自动填充。
+- 先切换客户 / 供应商，确认下拉列表中的应收 / 应付单据被正确过滤。
 
-5. Export consistency
-   - Export AR/AP CSV and verify `阶段` column exists and values are populated.
+## 3. 采购 / 销售执行防错
+
+- 在采购或销售执行中，填写**大于剩余可执行数量**的数量。
+- 确认出现行内错误提示，且提交按钮处于不可用状态。
+- 成功提交一次执行操作后，在处理未完成前重复点击应被拦截。
+
+## 4. 催办相关
+
+- 加载催办列表并切换排序方式。
+- 修改预警 / 危险天数阈值并保存。
+- 刷新页面后确认阈值仍然保留。
+
+## 5. 导出一致性
+
+- 导出应收 / 应付 CSV，确认包含「阶段」列且取值不为空。
