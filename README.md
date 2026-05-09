@@ -8,7 +8,7 @@
 
 - **Node.js 20+**（以 `package.json`、`.nvmrc` 为准）。使用 nvm：`nvm install && nvm use`。
 - **better-sqlite3**：若更换 Node 大版本，请执行 `npm run rebuild:native`（或删除 `node_modules` 后重新 `npm install`）。
-- **数据**：SQLite 文件始终为 `DATA_DIR` 目录下的 `erp.db`；未设置时 `DATA_DIR` 默认为 `data`（即项目根下 `./data/erp.db`）。
+- **数据**：权威 SQLite 路径为 **`DATA_DIR/erp.db`**；未设置 `DATA_DIR` 时默认为项目根下 **`./data/erp.db`**。若历史上曾在根目录放置过 `./erp.db`，首次启动时会自动复制到 `data/`（见 `src/db.ts`），之后请以 `data/` 为准并做好备份。
 
 ## 快速开始
 
@@ -29,11 +29,15 @@ npm run dev
 
 ## Web 控制台（`/app`）
 
+静态页面与脚本位于仓库根目录 `public/`（`index.html`、`app.js`），由服务端挂载到 `/app`。
+
 - 浏览器打开 `http://localhost:3100/app`（与 `PORT` 一致即可）。
-- **商品**：「商品库存」页可筛选、导出 CSV；**「新增商品」** 需 `stock:write` 或 `product:write`（见下节权限）。亦可调用 `POST /api/products`。
-- **采购 / 销售**：左侧「②」「③」默认只建 **草稿**；可勾选 **「创建后自动提交」**（仍不会自动审批），便于直接进入「待我审批」。
-- **审批工作台**：「加载采购单 / 销售单 / 待我审批」；点表格行会拉取 **`GET /api/purchase-orders/:id` 或 `GET /api/sales-orders/:id`**，在右侧以表头 + 明细行展示；**「复制详情 curl」** 生成带当前登录 Token 的查询命令（仅本机演示用，勿泄露）。
-- **销售单来源**：与采购单独立，由「③」或 `POST /api/sales-orders` 创建，**不会**从采购单自动生成。
+- **导航**：左侧按「创建 / 执行 / 审批与资金 / 分析与治理」分组；采购执行、销售执行有独立入口；商品创建与单据创建已拆分面板。
+- **商品**：「商品库存」可筛选、导出 CSV；列表内金额类字段按两位小数展示。**「新增商品」** 需 `stock:write` 或 `product:write`。亦可调用 `POST /api/products`。
+- **采购 / 销售**：在「单据创建」中建单，默认 **草稿**；可勾选 **「创建后自动提交」**（仍不会自动审批），便于进入「待我审批」。
+- **采购执行 / 销售执行**：可按已审批订单收货、发货、退货；面板内有待办摘要与快捷单带参；提交前会做订单状态、剩余可执行量与库存等前端校验（仍以服务端校验为准）。
+- **审批工作台**：可加载采购单 / 销售单 / 待我审批；支持部分列显隐（偏好存浏览器）；点表格行拉取 **`GET /api/purchase-orders/:id` 或 `GET /api/sales-orders/:id`**，右侧展示表头与明细；**「复制详情 curl」** 仅供本机演示，勿泄露 Token。
+- **销售单来源**：与采购单独立，由单据创建或 `POST /api/sales-orders` 创建，**不会**从采购单自动生成。
 
 ## 本地验证（无需 Docker）
 
@@ -75,13 +79,40 @@ npm run e2e  -- http://127.0.0.1:3100
 
 **GitHub：**`.github/` 下 CI 会跑 `npm audit`（仅 high+）、`npm run verify`、对 `src/` 的 CodeQL、以及 Dependabot。仅修改 `*.md`、`LICENSE` 或 `docs/**` 的推送/PR 会跳过 CI 与 CodeQL。
 
+## Git：同步到 Gitee（与 GitHub 并存）
+
+仓库默认 `origin` 可能指向 GitHub，可在本地增加第二个远程，例如：
+
+```bash
+git remote add gitee https://gitee.com/<用户名>/<仓库名>.git
+git push -u gitee main
+```
+
+- **HTTPS 推送**：用户名填 Gitee 登录名，**密码处填「私人令牌 PAT」**（在 Gitee：头像 → 设置 → 私人令牌 中生成），不要用账号登录密码。
+- **SSH 推送**：把个人账号的 **SSH 公钥** 加到 Gitee「SSH 公钥」，不要用仓库的 **部署公钥（DeployKey）**——部署钥默认只读，推送会报 `DeployKey does not support push code`。
+- 若在 Cursor/VS Code 终端 push HTTPS 时出现凭据或 `vscode-git-*.sock` 相关错误，可在仓库目录禁用编辑器注入的凭据助手后再推送：
+  ```bash
+  GIT_ASKPASS= SSH_ASKPASS= GIT_TERMINAL_PROMPT=1 git -c credential.helper= push -u gitee main
+  ```
+
 ## Docker
 
 ```bash
 docker compose up --build
 ```
 
-浏览器访问 `http://localhost:3100/health` 与 `http://localhost:3100/app`。端口、环境变量与健康检查见 `docker-compose.yml`。（需本机可访问 Docker 守护进程。）
+后台运行可加 `-d`。浏览器访问 `http://localhost:3100/health` 与 `http://localhost:3100/app`。端口、环境变量与健康检查见 `docker-compose.yml`。（需本机可访问 Docker 守护进程。）
+
+### Windows（Docker Desktop，推荐）
+
+适合不想在本机装 Node / bash 脚本的场景：
+
+1. 安装 [Docker Desktop for Windows](https://www.docker.com/products/docker-desktop/)，架构一般为 **AMD64（x86_64）**；ARM 设备选 **ARM64**。不确定时在 PowerShell 执行：`echo $env:PROCESSOR_ARCHITECTURE`（`AMD64` 即选 AMD64 安装包）。
+2. 在项目根目录打开 PowerShell：
+   ```powershell
+   docker compose up --build -d
+   ```
+3. 浏览器打开 `http://localhost:3100/app`，默认账号见上文「快速开始」。
 
 ### 生产部署检查清单
 
@@ -94,8 +125,10 @@ docker compose up --build
 
 ## 配置
 
-- 参考模板：`.env.example`；生产环境在 `NODE_ENV=production` 时需提供足够强度的 `JWT_SECRET`（建议 ≥ 32 字符）。
-- 校验： `npm run validate:env -- .env`
+- 环境变量模板：项目根目录 **`.env.example`**（开发默认值 + 可选扫描参数；生产请改 `NODE_ENV` 与 `JWT_SECRET`）。
+- 本地使用：`cp .env.example .env` 后按需编辑。
+- 生产环境在 `NODE_ENV=production` 时 **`JWT_SECRET` 必填**（≥ 32 字符，随机生成）。
+- 校验：`npm run validate:env -- .env`
 
 ## 数据库
 
@@ -104,6 +137,8 @@ npm run migrate
 ```
 
 拉取代码后若 `src/migrate` / `src/db` 有结构变更，请执行迁移以保持一致。
+
+备份与上线请以 **`data/erp.db`**（及同目录 `-wal`/`-shm`）为准；勿依赖根目录遗留的 `erp.db`。
 
 ## 运维
 
@@ -144,7 +179,7 @@ npm run dr:drill -- "http://localhost:3100" /opt/gbf-erp/data /opt/gbf-erp/backu
 npm run rollback -- /opt/gbf-erp /opt/gbf-erp/backups/erp-YYYYmmdd-HHMMSS.tar.gz gbf-erp.service
 ```
 
-其他资产：`env.example`、`deploy/gbf-erp.service`、`deploy/logrotate-gbf-erp`。
+其他资产：`.env.example`、`deploy/gbf-erp.service`、`deploy/logrotate-gbf-erp`。
 
 ## API 示例（curl）
 
@@ -346,6 +381,9 @@ Web 控制台中部分按钮会按权限禁用（灰色）。**审批通过/驳�
 | 幂等返回 409 或体不一致 | 同一 `x-idempotency-key` 仅在与**完全相同的** JSON 体复用时才视为同一请求。 |
 | Webhook 一直 `retry` / `failed` | 检查 URL 可达、TLS 证书；若启用 `secret` 再校验收端 HMAC 是否与约定一致。 |
 | `npm run docker:test` 立即退出并提示无法连接 Docker | 将用户加入 `docker` 组或使用 `sudo`；不影响 `npm run verify`（不依赖 Docker）。 |
+| Gitee `Permission denied (publickey)` | 配置个人 SSH 公钥到账号；确认未误用只读部署钥。 |
+| Gitee `DeployKey does not support push code` | 勿用仓库 DeployKey 推送；改用账号 SSH 或 HTTPS + PAT。 |
+| Gitee HTTPS `Unauthorized` / 凭据无效 | 使用私人令牌作密码；必要时按上文「Git：同步到 Gitee」禁用 `credential.helper` 后再 push。 |
 
 ## 后续可迭代（参考）
 

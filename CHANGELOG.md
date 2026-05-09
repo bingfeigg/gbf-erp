@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Merged environment templates into a single `.env.example` and removed duplicate `env.example`.
+
 ## 0.2.0 - 2026-04-24
 
 - Added multi-organization isolation across core ERP read/write APIs.
@@ -16,7 +20,7 @@
   - logrotate policy (`deploy/logrotate-gbf-erp`)
   - install/deploy/cron scripts in `scripts/`
 - Added runtime hardening assets:
-  - environment template (`env.example`)
+  - environment template (`.env.example`)
   - startup config validation in API boot sequence
   - env validation script (`scripts/validate-env.sh`)
   - disaster recovery drill script (`scripts/dr-drill.sh`)
