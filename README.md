@@ -4,6 +4,10 @@
 
 可运行的贸易类 ERP 后端：JWT 认证、主数据、带审批的采购/销售、库存、应收/应付、收款/付款、日记账与报表等。
 
+## 文档
+
+补充说明与变更记录见 [`docs/`](./docs/)（例如 [CHANGELOG](./docs/CHANGELOG.md)、[前端回归冒烟清单](./docs/regression-smoke.md)）。
+
 ## 环境要求
 
 - **Node.js 20+**（以 `package.json`、`.nvmrc` 为准）。使用 nvm：`nvm install && nvm use`。

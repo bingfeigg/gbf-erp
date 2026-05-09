@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Merged environment templates into a single `.env.example` and removed duplicate `env.example`.
+- Moved `CHANGELOG.md` and `scripts/regression-smoke.md` under `docs/`; added `docs/README.md` index.
 
 ## 0.2.0 - 2026-04-24
 
