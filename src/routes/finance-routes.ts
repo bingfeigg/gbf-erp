@@ -167,7 +167,7 @@ export function registerFinanceRoutes(app: Express): void {
         entryNo: makeEntryNo("JE-RC-"),
         refType: "cash_receipt",
         refId: receiptId,
-        memo: `Receipt ${receiptNo}`,
+        memo: `收款单 ${receiptNo}`,
         lines: [
           { accountCode: "1001", debit: amount, credit: 0 },
           { accountCode: "1122", debit: 0, credit: amount }
@@ -283,7 +283,7 @@ export function registerFinanceRoutes(app: Express): void {
         entryNo: makeEntryNo("JE-PY-"),
         refType: "cash_payment",
         refId: paymentId,
-        memo: `Payment ${paymentNo}`,
+        memo: `付款单 ${paymentNo}`,
         lines: [
           { accountCode: "2202", debit: amount, credit: 0 },
           { accountCode: "1001", debit: 0, credit: amount }

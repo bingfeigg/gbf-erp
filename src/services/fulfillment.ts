@@ -154,7 +154,7 @@ export function createPurchaseReceipt(args: {
       entryNo: makeEntryNo("JE-PR-"),
       refType: "purchase_receipt",
       refId: receiptId,
-      memo: `Purchase receipt ${receiptNo}`,
+          memo: `采购收货 ${receiptNo}`,
       lines: [
         { accountCode: "1405", debit: totalAmount, credit: 0 },
         { accountCode: "2202", debit: 0, credit: totalAmount }
@@ -256,7 +256,7 @@ export function createSalesDelivery(args: {
       entryNo: makeEntryNo("JE-SD-"),
       refType: "sales_delivery",
       refId: deliveryId,
-      memo: `Sales delivery ${deliveryNo}`,
+          memo: `销售发货 ${deliveryNo}`,
       lines: [
         { accountCode: "1122", debit: totalAmount, credit: 0 },
         { accountCode: "6001", debit: 0, credit: totalAmount },
@@ -348,7 +348,7 @@ export function createPurchaseReturn(args: {
       entryNo: makeEntryNo("JE-PRT-"),
       refType: "purchase_return",
       refId: returnId,
-      memo: `Purchase return ${returnNo}`,
+          memo: `采购退货 ${returnNo}`,
       lines: [
         { accountCode: "2202", debit: totalAmount, credit: 0 },
         { accountCode: "1405", debit: 0, credit: totalAmount }
@@ -439,7 +439,7 @@ export function createSalesReturn(args: {
       entryNo: makeEntryNo("JE-SRT-"),
       refType: "sales_return",
       refId: returnId,
-      memo: `Sales return ${returnNo}`,
+          memo: `销售退货 ${returnNo}`,
       lines: [
         { accountCode: "6001", debit: totalAmount, credit: 0 },
         { accountCode: "1122", debit: 0, credit: totalAmount },

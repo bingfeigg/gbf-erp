@@ -12,19 +12,8 @@ import { ERP_INITIAL_TABLES_DDL, ERP_INDEX_DDL } from "./db/initial-ddl";
 
 const dataDir = path.resolve(process.cwd(), process.env.DATA_DIR ?? "data");
 const dbPath = path.join(dataDir, "erp.db");
-const legacyRootDb = path.join(process.cwd(), "erp.db");
 
 fs.mkdirSync(dataDir, { recursive: true });
-
-if (!fs.existsSync(dbPath) && fs.existsSync(legacyRootDb)) {
-  fs.copyFileSync(legacyRootDb, dbPath);
-  for (const ext of ["-wal", "-shm"] as const) {
-    const leg = legacyRootDb + ext;
-    if (fs.existsSync(leg)) {
-      fs.copyFileSync(leg, dbPath + ext);
-    }
-  }
-}
 
 const db = new Database(dbPath);
 db.pragma("journal_mode = WAL");

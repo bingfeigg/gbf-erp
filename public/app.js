@@ -44,23 +44,23 @@ const roleWorkspacePreset = {
 };
 const roleTodoConfig = {
   sales: {
-    base: ["优先检查销售草稿并提交审批。", "收款后刷新应收与凭证，确认状态同步。"],
-    withCounters: ({ arOpen }) => (arOpen > 0 ? [`有 ${arOpen} 条应收未收，建议跟进收款。`] : [])
+    base: ["销售单草稿：提交审批后再发货、开票与收款。", "收款后打开「应收」「凭证」核对余额与入账。"],
+    withCounters: ({ arOpen }) => (arOpen > 0 ? [`应收：当前 ${arOpen} 笔未结清，建议跟进收款。`] : [])
   },
   purchase: {
-    base: ["优先检查采购草稿并提交审批。", "付款后刷新应付与凭证，确认状态同步。"],
-    withCounters: ({ apOpen }) => (apOpen > 0 ? [`有 ${apOpen} 条应付未付，建议安排付款。`] : [])
+    base: ["采购单草稿：审批通过后再收货；付款前确认已收齐货。", "付款后在「应付」「凭证」核对付款与账面。"],
+    withCounters: ({ apOpen }) => (apOpen > 0 ? [`应付：当前 ${apOpen} 笔未结清，建议安排付款。`] : [])
   },
   finance: {
-    base: ["先处理待审批单据，再执行收付款。", "重点核对应收/应付未清金额和凭证是否一致。"],
+    base: ["先处理「我的待审批」，再办收款、付款。", "核对应收/应付未清额与凭证，大额与异常重点看。"],
     withCounters: () => []
   },
   warehouse: {
-    base: ["优先核对库存与商品主数据，处理异常数量。", "配合业务单据执行后，及时刷新库存与趋势。"],
+    base: ["核对商品主数据与库存数量，处理差异。", "收货/发货执行后刷新「商品库存」与趋势。"],
     withCounters: () => []
   },
   admin: {
-    base: ["先查看我的待审批列表，处理已提交单据。", "抽查应收/应付与凭证一致性，关注异常。"],
+    base: ["「我的待审批」优先清空，避免单据积压。", "抽查应收、应付与凭证一致性，关注异常与大额。"],
     withCounters: () => []
   }
 };
@@ -385,7 +385,7 @@ function normalizeRoleKey(role) {
 function renderRoleTodoFocus() {
   if (!roleTodoList || !roleTodoHint) return;
   if (!state.token) {
-    roleTodoHint.textContent = "登录后会根据角色自动生成关键待办。";
+    roleTodoHint.textContent = "登录后将结合您的角色与看板数据展示优先提示。";
     roleTodoList.innerHTML = "";
     return;
   }
@@ -395,9 +395,11 @@ function renderRoleTodoFocus() {
   const roleKey = normalizeRoleKey(state.role);
   const cfg = roleTodoConfig[roleKey] || roleTodoConfig.admin;
   const todos = [...(cfg.base || []), ...((cfg.withCounters && cfg.withCounters({ arOpen, apOpen })) || [])];
-  if (pendingSubmitted > 0) todos.unshift(`当前有 ${pendingSubmitted} 条已提交单据待处理。`);
-  roleTodoHint.textContent = `当前角色：${zhRole(roleKey)}（动态建议）`;
-  roleTodoList.innerHTML = todos.slice(0, 4).map((t) => `<li>${t}</li>`).join("");
+  if (pendingSubmitted > 0) {
+    todos.unshift(`审批工作台：${pendingSubmitted} 条「已提交」待处理。`);
+  }
+  roleTodoHint.textContent = `当前身份「${zhRole(roleKey)}」— 以下为优先提示（随列表数据更新）`;
+  roleTodoList.innerHTML = todos.slice(0, 5).map((t) => `<li>${t}</li>`).join("");
 }
 
 
@@ -1059,6 +1061,9 @@ function setActivePanel(panelId) {
     bizParamsWorkbench.style.display = shouldShow ? "" : "none";
   }
   syncBizParamsHint(panelId);
+  if ((panelId === "panelPurchaseExec" || panelId === "panelSalesExec") && state.token) {
+    void refreshExecutionPicks().catch(() => {});
+  }
 }
 
 function getFirstVisibleNavPanel() {
@@ -1455,6 +1460,7 @@ bind("btnExportJournals", async () => {
     cache.journals.map((r) => ({
       entryNo: r.entryNo,
       refType: r.refType,
+      refId: r.refId,
       memo: r.memo,
       debit: (r.lines || []).reduce((s, l) => s + Number(l.debit || 0), 0),
       credit: (r.lines || []).reduce((s, l) => s + Number(l.credit || 0), 0),
@@ -1463,7 +1469,7 @@ bind("btnExportJournals", async () => {
     [
       { label: "凭证号", getter: (r) => r.entryNo },
       { label: "来源", getter: (r) => zhJournalRefType(r.refType) },
-      { label: "摘要", getter: (r) => r.memo },
+      { label: "摘要", getter: (r) => zhJournalMemo(r) },
       { label: "借方", getter: (r) => r.debit },
       { label: "贷方", getter: (r) => r.credit },
       { label: "创建时间", getter: (r) => r.createdAt }
@@ -1477,10 +1483,9 @@ bind("btnExportAudit", async () => {
   downloadCsv("audit_logs.csv", cache.audit, [
     { label: "时间", getter: (r) => r.createdAt },
     { label: "用户", getter: (r) => r.username || "" },
-    { label: "动作", getter: (r) => r.action },
-    { label: "实体类型", getter: (r) => r.entityType },
-    { label: "实体ID", getter: (r) => r.entityId || "" },
-    { label: "详情", getter: (r) => r.detail || "" }
+    { label: "动作", getter: (r) => zhAuditAction(r.action) },
+    { label: "实体", getter: (r) => zhAuditEntityLabel(r.entityType, r.entityId) },
+    { label: "详情", getter: (r) => zhAuditDetail(r.detail) }
   ]);
 });
 bind("btnExportAlerts", async () => {

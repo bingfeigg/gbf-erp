@@ -12,7 +12,7 @@
 
 - **Node.js 20+**（以 `package.json`、`.nvmrc` 为准）。使用 nvm：`nvm install && nvm use`。
 - **better-sqlite3**：若更换 Node 大版本，请执行 `npm run rebuild:native`（或删除 `node_modules` 后重新 `npm install`）。
-- **数据**：权威 SQLite 路径为 **`DATA_DIR/erp.db`**；未设置 `DATA_DIR` 时默认为项目根下 **`./data/erp.db`**。若历史上曾在根目录放置过 `./erp.db`，首次启动时会自动复制到 `data/`（见 `src/db.ts`），之后请以 `data/` 为准并做好备份。
+- **数据**：唯一使用的 SQLite 路径为 **`DATA_DIR/erp.db`**；未设置 `DATA_DIR` 时默认为项目根下 **`./data/erp.db`**（及 WAL 时的同目录 `-wal`/`-shm`）。不再从项目根目录 `./erp.db` 自动导入；若仍有旧文件，请自行迁入 `data/` 或删除以免混淆。
 
 ## 快速开始
 
@@ -142,7 +142,7 @@ npm run migrate
 
 拉取代码后若 `src/migrate` / `src/db` 有结构变更，请执行迁移以保持一致。
 
-备份与上线请以 **`data/erp.db`**（及同目录 `-wal`/`-shm`）为准；勿依赖根目录遗留的 `erp.db`。
+备份与上线请以 **`DATA_DIR` 下的 `erp.db`**（及同目录 `-wal`/`-shm`）为唯一权威；默认即 **`./data/`**。
 
 ## 运维
 

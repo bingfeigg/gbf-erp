@@ -46,11 +46,86 @@ const JOURNAL_REF_ZH = {
   cash_receipt: "收款单",
   cash_payment: "付款单",
   purchase_order_reverse: "采购冲销",
-  sales_order_reverse: "销售冲销"
+  sales_order_reverse: "销售冲销",
+  purchase_receipt: "采购收货",
+  sales_delivery: "销售发货",
+  purchase_return: "采购退货",
+  sales_return: "销售退货"
 };
 
 const EVENT_TYPE_ZH = {
   "approval.overdue": "审批超时"
+};
+
+/** 审计日志 entity_type → 中文（展示用） */
+const AUDIT_ENTITY_TYPE_ZH = {
+  user: "用户",
+  customer: "客户",
+  supplier: "供应商",
+  product: "商品",
+  warehouse: "仓库",
+  location: "库位",
+  purchase_order: "采购订单",
+  sales_order: "销售订单",
+  cash_receipt: "收款单",
+  cash_payment: "付款单",
+  purchase_receipt: "采购收货单",
+  sales_delivery: "销售发货单",
+  purchase_return: "采购退货单",
+  sales_return: "销售退货单"
+};
+
+/** 审计日志 action → 中文（与后端 writeAuditLog 的 action 一致） */
+const AUDIT_ACTION_ZH = {
+  "auth.login": "登录",
+  "auth.logout": "登出",
+  "purchase_order.create": "创建采购订单",
+  "purchase_order.submit": "提交采购订单",
+  "purchase_order.approve": "采购订单审批通过",
+  "purchase_order.reject": "采购订单驳回",
+  "purchase_order.void": "采购订单作废",
+  "purchase_order.reverse": "采购订单冲销",
+  "sales_order.create": "创建销售订单",
+  "sales_order.submit": "提交销售订单",
+  "sales_order.approve": "销售订单审批通过",
+  "sales_order.reject": "销售订单驳回",
+  "sales_order.void": "销售订单作废",
+  "sales_order.reverse": "销售订单冲销",
+  "receipt.create": "创建收款单",
+  "payment.create": "创建付款单",
+  "purchase_receipt.create": "采购收货记账",
+  "sales_delivery.create": "销售发货出库",
+  "purchase_return.create": "采购退货出库",
+  "sales_return.create": "销售退货入库",
+  "user.create": "创建用户",
+  "customer.create": "创建客户",
+  "supplier.create": "创建供应商",
+  "product.create": "创建商品",
+  "warehouse.create": "创建仓库",
+  "location.create": "创建库位"
+};
+
+const AUDIT_DETAIL_KEY_ZH = {
+  orderNo: "单号",
+  receiptNo: "单据号",
+  paymentNo: "付款单号",
+  deliveryNo: "发货单号",
+  returnNo: "退货单号",
+  customerId: "客户ID",
+  supplierId: "供应商ID",
+  amount: "金额",
+  orderId: "订单ID",
+  totalAmount: "总金额",
+  totalCost: "总成本",
+  username: "用户名",
+  role: "角色",
+  code: "编码",
+  name: "名称",
+  sku: "SKU",
+  warehouseId: "仓库ID",
+  from: "原状态",
+  to: "新状态",
+  comment: "备注"
 };
 
 function pickZh(map, key) {
@@ -167,6 +242,70 @@ function zhApprovalAction(s) {
 
 function zhJournalRefType(s) {
   return pickZh(JOURNAL_REF_ZH, s);
+}
+
+/** 凭证列表/详情「摘要」：新数据为中文；旧库中英摘要转为可读中文 */
+function zhJournalMemo(row) {
+  const raw = String(row?.memo ?? "").trim();
+  const refType = row?.refType;
+  const refId = row?.refId;
+  if (raw) {
+    const legacy = [
+      [/^Purchase receipt\s+(.+)$/i, (m) => `采购收货 ${m[1]}`],
+      [/^Sales delivery\s+(.+)$/i, (m) => `销售发货 ${m[1]}`],
+      [/^Purchase return\s+(.+)$/i, (m) => `采购退货 ${m[1]}`],
+      [/^Sales return\s+(.+)$/i, (m) => `销售退货 ${m[1]}`],
+      [/^Receipt\s+(.+)$/i, (m) => `收款单 ${m[1]}`],
+      [/^Payment\s+(.+)$/i, (m) => `付款单 ${m[1]}`]
+    ];
+    for (const [re, fn] of legacy) {
+      const m = raw.match(re);
+      if (m) return fn(m);
+    }
+    return raw;
+  }
+  const zh = zhJournalRefType(refType);
+  if (refId != null && refId !== "") return `${zh} #${refId}`;
+  return zh;
+}
+
+function zhAuditAction(action) {
+  if (action == null || action === "") return "-";
+  return AUDIT_ACTION_ZH[action] || String(action);
+}
+
+function zhAuditEntityLabel(entityType, entityId) {
+  const t = AUDIT_ENTITY_TYPE_ZH[entityType] || entityType || "-";
+  if (entityId != null && entityId !== "") return `${t} #${entityId}`;
+  return t;
+}
+
+/** 将 audit_logs.detail（JSON 字符串或对象）格式化为中文可读 */
+function zhAuditDetail(detail) {
+  if (detail == null || detail === "") return "";
+  let obj = detail;
+  if (typeof detail === "string") {
+    try {
+      obj = JSON.parse(detail);
+    } catch {
+      return detail;
+    }
+  }
+  if (typeof obj !== "object" || obj === null) return String(detail);
+
+  const parts = [];
+  for (const [k, v] of Object.entries(obj)) {
+    if (v === null || v === undefined || v === "") continue;
+    const label = AUDIT_DETAIL_KEY_ZH[k] || k;
+    let display = v;
+    if (k === "from" || k === "to") display = zhOrderStatus(String(v));
+    else if (k === "role") display = zhRole(String(v));
+    else if (k === "amount" || k === "totalAmount" || k === "totalCost") display = typeof fmtMoney === "function" ? fmtMoney(Number(v)) : String(v);
+    else if (typeof v === "object") display = JSON.stringify(v);
+    else display = String(v);
+    parts.push(`${label}：${display}`);
+  }
+  return parts.join("；");
 }
 
 function zhEventType(s) {

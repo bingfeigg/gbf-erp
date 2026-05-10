@@ -205,8 +205,8 @@ function renderJournalDetailHtml(entry) {
       <div class="k"><div class="l">贷方合计</div><div class="v">${fmtMoney(credit)}</div></div>
     </div>
     <div class="journal-detail-meta">
-      <div>参考：${escapeHtml(fmtMaybe(entry.refType))} #${escapeHtml(fmtMaybe(entry.refId))}</div>
-      <div>摘要：${escapeHtml(fmtMaybe(entry.memo))}</div>
+      <div>参考：${escapeHtml(zhJournalRefType(entry.refType))} #${escapeHtml(fmtMaybe(entry.refId))}</div>
+      <div>摘要：${escapeHtml(zhJournalMemo(entry))}</div>
       <div>时间：${escapeHtml(fmtMaybe(entry.createdAt))}</div>
       <div>分录：共 ${lines.length} 行</div>
     </div>

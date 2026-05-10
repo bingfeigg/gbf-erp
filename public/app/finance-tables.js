@@ -143,13 +143,17 @@ function renderJournalsFromCache() {
   const normalized = rows.map((r) => ({
     entryNo: r.entryNo,
     refType: r.refType,
+    refId: r.refId,
     memo: r.memo,
     debit: (r.lines || []).reduce((s, l) => s + Number(l.debit || 0), 0),
     credit: (r.lines || []).reduce((s, l) => s + Number(l.credit || 0), 0),
     createdAt: r.createdAt
   }));
   const filtered = normalized.filter((r) =>
-    textMatchEx(r, ["entryNo", "refType", "memo"], filters.journals.value.trim(), [(row) => zhJournalRefType(row.refType)])
+    textMatchEx(r, ["entryNo", "refType", "memo"], filters.journals.value.trim(), [
+      (row) => zhJournalRefType(row.refType),
+      (row) => zhJournalMemo(row)
+    ])
   );
   const pageRows = paginate("journals", filtered);
   renderTable(
@@ -158,7 +162,7 @@ function renderJournalsFromCache() {
     [
       { label: "凭证号", getter: (r) => r.entryNo },
       { label: "来源", getter: (r) => zhJournalRefType(r.refType) },
-      { label: "摘要", getter: (r) => r.memo },
+      { label: "摘要", getter: (r) => zhJournalMemo(r) },
       { label: "借方", getter: (r) => r.debit },
       { label: "贷方", getter: (r) => r.credit },
       { label: "创建时间", getter: (r) => r.createdAt }
@@ -185,16 +189,21 @@ async function queryAudit() {
 
 function renderAuditFromCache() {
   const rows = cache.audit;
+  const kw = filters.audit.value.trim();
   const filtered = rows.filter((r) =>
-    textMatch(r, ["username", "action", "entityType", "entityId"], filters.audit.value.trim())
+    textMatchEx(r, ["username", "action", "entityType", "entityId", "detail"], kw, [
+      (row) => zhAuditAction(row.action),
+      (row) => zhAuditEntityLabel(row.entityType, row.entityId),
+      (row) => zhAuditDetail(row.detail)
+    ])
   );
   const pageRows = paginate("audit", filtered);
   renderTable(tableTargets.audit, pageRows, [
     { label: "时间", getter: (r) => r.createdAt },
     { label: "用户", getter: (r) => r.username || "-" },
-    { label: "动作", getter: (r) => r.action },
-    { label: "实体", getter: (r) => `${r.entityType}:${r.entityId || ""}` },
-    { label: "详情", getter: (r) => r.detail || "" }
+    { label: "动作", getter: (r) => zhAuditAction(r.action) },
+    { label: "实体", getter: (r) => zhAuditEntityLabel(r.entityType, r.entityId) },
+    { label: "详情", getter: (r) => zhAuditDetail(r.detail) }
   ]);
 }
 
