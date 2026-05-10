@@ -3,17 +3,9 @@ import db from "../db";
 import { auth, hasPermission, AuthenticatedRequest } from "../middleware/auth";
 import { canTransitionOrder } from "../services/order-helpers";
 import { makeArInvoiceNo } from "../services/ar-invoice-no";
+import { paginateInMemory } from "../utils/pagination";
 
 export function registerApprovalsRoutes(app: Express): void {
-  const maybePaginate = <T>(req: AuthenticatedRequest, rows: T[]) => {
-    const pageSize = Math.max(1, Math.min(200, Number(req.query.pageSize || 0)));
-    const page = Math.max(1, Number(req.query.page || 1));
-    if (!(pageSize > 0)) return rows;
-    const total = rows.length;
-    const start = (page - 1) * pageSize;
-    return { rows: rows.slice(start, start + pageSize), total, page, pageSize };
-  };
-
   app.get("/api/approvals/pending", auth, (req, res, next) => {
     const user = (req as AuthenticatedRequest).user;
     if (!user) return next(new Error("Unauthorized"));
@@ -159,7 +151,7 @@ export function registerApprovalsRoutes(app: Express): void {
       }
       return true;
     });
-    res.json(maybePaginate(req as AuthenticatedRequest, filtered));
+    res.json(paginateInMemory(req, filtered, { maxPageSize: 200 }));
   });
 
   app.get("/api/approvals/overdue", auth, (req, res, next) => {
@@ -194,7 +186,7 @@ export function registerApprovalsRoutes(app: Express): void {
       rows.push(...so);
     }
     rows.sort((a, b) => String(a.submittedAt || "").localeCompare(String(b.submittedAt || "")));
-    res.json(maybePaginate(req as AuthenticatedRequest, rows));
+    res.json(paginateInMemory(req, rows, { maxPageSize: 200 }));
   });
 
   app.get("/api/approvals/sla-dashboard", auth, (req, res, next) => {

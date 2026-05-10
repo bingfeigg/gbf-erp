@@ -1,17 +1,9 @@
 import { Express } from "express";
 import db from "../db";
 import { auth, getOrgId, requirePermission } from "../middleware/auth";
+import { paginateInMemory } from "../utils/pagination";
 
 export function registerReminderRoutes(app: Express): void {
-  const maybePaginate = <T>(req: { query: Record<string, unknown> }, rows: T[]) => {
-    const pageSize = Math.max(1, Math.min(300, Number(req.query.pageSize || 0)));
-    const page = Math.max(1, Number(req.query.page || 1));
-    if (!(pageSize > 0)) return rows;
-    const total = rows.length;
-    const start = (page - 1) * pageSize;
-    return { rows: rows.slice(start, start + pageSize), total, page, pageSize };
-  };
-
   // 催收货：已审批采购单且未完全收货
   app.get("/api/reminders/purchase-receipts", auth, requirePermission("purchase:read"), (req, res) => {
     const orgId = getOrgId(req);
@@ -35,7 +27,7 @@ export function registerReminderRoutes(app: Express): void {
         `
       )
       .all(orgId);
-    res.json(maybePaginate(req, rows as Array<Record<string, unknown>>));
+    res.json(paginateInMemory(req, rows as Array<Record<string, unknown>>, { maxPageSize: 300 }));
   });
 
   // 催发货：已审批销售单且未完全发货
@@ -61,7 +53,7 @@ export function registerReminderRoutes(app: Express): void {
         `
       )
       .all(orgId);
-    res.json(maybePaginate(req, rows as Array<Record<string, unknown>>));
+    res.json(paginateInMemory(req, rows as Array<Record<string, unknown>>, { maxPageSize: 300 }));
   });
 }
 

@@ -6,5 +6,6 @@
 
 | 文件名 | 内容简介 |
 |--------|----------|
+| [architecture.md](./architecture.md) | **服务端代码架构**：`src/` 目录职责、路由注册顺序、请求链路、与 `public`/`openapi` 的边界及扩展建议。 |
 | [CHANGELOG.md](./CHANGELOG.md) | 各版本的变更摘要与新增能力说明。 |
 | [regression-smoke.md](./regression-smoke.md) | 修改控制台界面后建议执行的**手工冒烟回归**步骤清单，用于快速发现筛选、审批、执行与导出等问题。 |

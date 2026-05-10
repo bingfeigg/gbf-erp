@@ -6,7 +6,7 @@
 
 ## 文档
 
-补充说明（变更记录、界面冒烟清单等）见 **[`docs/`](./docs/)** 目录；入口说明见 [`docs/README.md`](./docs/README.md)。
+补充说明（**代码架构**、变更记录、界面冒烟清单等）见 **[`docs/`](./docs/)** 目录；入口说明见 [`docs/README.md`](./docs/README.md)。
 
 ## 环境要求
 

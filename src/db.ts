@@ -2,6 +2,12 @@ import fs from "fs";
 import path from "path";
 import Database from "better-sqlite3";
 import { hashPassword, isHashedPassword, verifyPassword } from "./security";
+import {
+  ensureColumn,
+  rebuildArInvoicesTable,
+  rebuildPartnerTable,
+  rebuildProductsTable
+} from "./db/schema-evolution";
 
 const dataDir = path.resolve(process.cwd(), process.env.DATA_DIR ?? "data");
 const dbPath = path.join(dataDir, "erp.db");
@@ -22,145 +28,6 @@ if (!fs.existsSync(dbPath) && fs.existsSync(legacyRootDb)) {
 const db = new Database(dbPath);
 db.pragma("journal_mode = WAL");
 db.pragma("foreign_keys = ON");
-
-function ensureColumn(table: string, column: string, definition: string) {
-  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
-  if (!cols.some((c) => c.name === column)) {
-    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
-  }
-}
-
-function hasUniqueIndexOn(table: string, columns: string[]): boolean {
-  const indexes = db.prepare(`PRAGMA index_list(${table})`).all() as Array<{ name: string; unique: number }>;
-  for (const idx of indexes) {
-    if (!idx.unique) continue;
-    const cols = db.prepare(`PRAGMA index_info(${idx.name})`).all() as Array<{ name: string }>;
-    const names = cols.map((c) => c.name);
-    if (names.length === columns.length && names.every((n, i) => n === columns[i])) return true;
-  }
-  return false;
-}
-
-function rebuildPartnerTable(args: {
-  table: "customers" | "suppliers";
-  codeColumn: "code";
-}) {
-  // Rebuild to switch UNIQUE(code) -> UNIQUE(organization_id, code)
-  const { table } = args;
-  if (hasUniqueIndexOn(table, ["organization_id", "code"])) return;
-
-  db.exec("BEGIN");
-  try {
-    db.exec(`ALTER TABLE ${table} RENAME TO ${table}_old;`);
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS ${table} (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        organization_id INTEGER NOT NULL DEFAULT 1,
-        code TEXT NOT NULL,
-        name TEXT NOT NULL,
-        contact TEXT,
-        phone TEXT,
-        UNIQUE (organization_id, code)
-      );
-    `);
-    db.exec(`
-      INSERT INTO ${table} (id, organization_id, code, name, contact, phone)
-      SELECT id, COALESCE(organization_id, 1), code, name, contact, phone
-      FROM ${table}_old;
-    `);
-    db.exec(`DROP TABLE ${table}_old;`);
-    db.exec("COMMIT");
-  } catch (e) {
-    db.exec("ROLLBACK");
-    throw e;
-  }
-}
-
-function rebuildProductsTable() {
-  // Rebuild to switch UNIQUE(sku) -> UNIQUE(organization_id, sku)
-  if (hasUniqueIndexOn("products", ["organization_id", "sku"])) return;
-
-  db.exec("BEGIN");
-  try {
-    db.exec(`ALTER TABLE products RENAME TO products_old;`);
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS products (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        organization_id INTEGER NOT NULL DEFAULT 1,
-        sku TEXT NOT NULL,
-        name TEXT NOT NULL,
-        unit TEXT NOT NULL,
-        cost_price REAL NOT NULL DEFAULT 0,
-        sale_price REAL NOT NULL DEFAULT 0,
-        UNIQUE (organization_id, sku)
-      );
-    `);
-    db.exec(`
-      INSERT INTO products (id, organization_id, sku, name, unit, cost_price, sale_price)
-      SELECT id, COALESCE(organization_id, 1), sku, name, unit, cost_price, sale_price
-      FROM products_old;
-    `);
-    db.exec(`DROP TABLE products_old;`);
-    db.exec("COMMIT");
-  } catch (e) {
-    db.exec("ROLLBACK");
-    throw e;
-  }
-}
-
-function rebuildArInvoicesTable() {
-  // Rebuild to switch UNIQUE(invoice_no) -> UNIQUE(organization_id, invoice_no)
-  if (hasUniqueIndexOn("ar_invoices", ["organization_id", "invoice_no"])) return;
-
-  db.exec("BEGIN");
-  try {
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS ar_invoices_new (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        organization_id INTEGER NOT NULL DEFAULT 1,
-        invoice_no TEXT NOT NULL,
-        customer_id INTEGER NOT NULL,
-        ref_type TEXT NOT NULL,
-        ref_id INTEGER NOT NULL,
-        total_amount REAL NOT NULL,
-        received_amount REAL NOT NULL DEFAULT 0,
-        status TEXT NOT NULL DEFAULT 'open',
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(customer_id) REFERENCES customers(id),
-        UNIQUE (organization_id, invoice_no)
-      );
-    `);
-    db.exec(`
-      INSERT INTO ar_invoices_new (id, organization_id, invoice_no, customer_id, ref_type, ref_id, total_amount, received_amount, status, created_at)
-      SELECT id, COALESCE(organization_id, 1), invoice_no, customer_id, ref_type, ref_id, total_amount, received_amount, status, created_at
-      FROM ar_invoices;
-    `);
-    db.exec("COMMIT");
-  } catch (e) {
-    db.exec("ROLLBACK");
-    throw e;
-  }
-
-  // Swap tables with FK checks temporarily disabled; child tables keep referencing "ar_invoices".
-  db.exec("PRAGMA foreign_keys = OFF");
-  db.exec("BEGIN");
-  try {
-    db.exec("DROP TABLE ar_invoices;");
-    db.exec("ALTER TABLE ar_invoices_new RENAME TO ar_invoices;");
-    db.exec("COMMIT");
-  } catch (e) {
-    db.exec("ROLLBACK");
-    // Best-effort cleanup for a partially created temp table.
-    try {
-      db.exec("DROP TABLE IF EXISTS ar_invoices_new;");
-    } catch (_ignore) {
-      // no-op
-    }
-    throw e;
-  } finally {
-    db.exec("PRAGMA foreign_keys = ON");
-  }
-}
 
 export function initDb() {
   db.exec(`
@@ -634,20 +501,20 @@ export function initDb() {
     );
   `);
 
-  ensureColumn("purchase_orders", "submitted_at", "TEXT");
-  ensureColumn("purchase_orders", "approved_at", "TEXT");
-  ensureColumn("purchase_orders", "rejected_at", "TEXT");
-  ensureColumn("purchase_orders", "voided_at", "TEXT");
-  ensureColumn("purchase_orders", "approved_by", "INTEGER");
-  ensureColumn("purchase_orders", "reversed_at", "TEXT");
-  ensureColumn("purchase_orders", "reversed_by", "INTEGER");
-  ensureColumn("sales_orders", "submitted_at", "TEXT");
-  ensureColumn("sales_orders", "approved_at", "TEXT");
-  ensureColumn("sales_orders", "rejected_at", "TEXT");
-  ensureColumn("sales_orders", "voided_at", "TEXT");
-  ensureColumn("sales_orders", "approved_by", "INTEGER");
-  ensureColumn("sales_orders", "reversed_at", "TEXT");
-  ensureColumn("sales_orders", "reversed_by", "INTEGER");
+  ensureColumn(db,"purchase_orders", "submitted_at", "TEXT");
+  ensureColumn(db,"purchase_orders", "approved_at", "TEXT");
+  ensureColumn(db,"purchase_orders", "rejected_at", "TEXT");
+  ensureColumn(db,"purchase_orders", "voided_at", "TEXT");
+  ensureColumn(db,"purchase_orders", "approved_by", "INTEGER");
+  ensureColumn(db,"purchase_orders", "reversed_at", "TEXT");
+  ensureColumn(db,"purchase_orders", "reversed_by", "INTEGER");
+  ensureColumn(db,"sales_orders", "submitted_at", "TEXT");
+  ensureColumn(db,"sales_orders", "approved_at", "TEXT");
+  ensureColumn(db,"sales_orders", "rejected_at", "TEXT");
+  ensureColumn(db,"sales_orders", "voided_at", "TEXT");
+  ensureColumn(db,"sales_orders", "approved_by", "INTEGER");
+  ensureColumn(db,"sales_orders", "reversed_at", "TEXT");
+  ensureColumn(db,"sales_orders", "reversed_by", "INTEGER");
 
   // Backward-compat: legacy "reject" used to set status back to draft but kept rejected_at.
   // Promote those rows to explicit status='rejected' so UI/status filters are consistent.
@@ -657,37 +524,37 @@ export function initDb() {
   } catch (_e) {
     // best-effort, never block boot
   }
-  ensureColumn("users", "organization_id", "INTEGER NOT NULL DEFAULT 1");
-  ensureColumn("customers", "organization_id", "INTEGER NOT NULL DEFAULT 1");
-  ensureColumn("suppliers", "organization_id", "INTEGER NOT NULL DEFAULT 1");
-  ensureColumn("products", "organization_id", "INTEGER NOT NULL DEFAULT 1");
-  ensureColumn("purchase_orders", "organization_id", "INTEGER NOT NULL DEFAULT 1");
-  ensureColumn("sales_orders", "organization_id", "INTEGER NOT NULL DEFAULT 1");
-  ensureColumn("journal_entries", "organization_id", "INTEGER NOT NULL DEFAULT 1");
-  ensureColumn("stock_ledger", "organization_id", "INTEGER NOT NULL DEFAULT 1");
-  ensureColumn("stock_ledger", "unit_cost", "REAL");
-  ensureColumn("stock_ledger", "warehouse_id", "INTEGER");
-  ensureColumn("stock_ledger", "location_id", "INTEGER");
-  ensureColumn("stock_ledger", "batch_no", "TEXT");
-  ensureColumn("ap_bills", "organization_id", "INTEGER NOT NULL DEFAULT 1");
-  ensureColumn("ar_invoices", "organization_id", "INTEGER NOT NULL DEFAULT 1");
-  ensureColumn("cash_receipts", "organization_id", "INTEGER NOT NULL DEFAULT 1");
-  ensureColumn("cash_payments", "organization_id", "INTEGER NOT NULL DEFAULT 1");
-  ensureColumn("audit_logs", "organization_id", "INTEGER NOT NULL DEFAULT 1");
-  ensureColumn("alert_events", "organization_id", "INTEGER NOT NULL DEFAULT 1");
-  ensureColumn("ar_receipt_lines", "organization_id", "INTEGER NOT NULL DEFAULT 1");
-  ensureColumn("ap_payment_lines", "organization_id", "INTEGER NOT NULL DEFAULT 1");
-  ensureColumn("webhook_endpoints", "organization_id", "INTEGER NOT NULL DEFAULT 1");
-  ensureColumn("webhook_deliveries", "organization_id", "INTEGER NOT NULL DEFAULT 1");
-  ensureColumn("purchase_order_items", "received_qty", "REAL NOT NULL DEFAULT 0");
-  ensureColumn("sales_order_items", "delivered_qty", "REAL NOT NULL DEFAULT 0");
+  ensureColumn(db,"users", "organization_id", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(db,"customers", "organization_id", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(db,"suppliers", "organization_id", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(db,"products", "organization_id", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(db,"purchase_orders", "organization_id", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(db,"sales_orders", "organization_id", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(db,"journal_entries", "organization_id", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(db,"stock_ledger", "organization_id", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(db,"stock_ledger", "unit_cost", "REAL");
+  ensureColumn(db,"stock_ledger", "warehouse_id", "INTEGER");
+  ensureColumn(db,"stock_ledger", "location_id", "INTEGER");
+  ensureColumn(db,"stock_ledger", "batch_no", "TEXT");
+  ensureColumn(db,"ap_bills", "organization_id", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(db,"ar_invoices", "organization_id", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(db,"cash_receipts", "organization_id", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(db,"cash_payments", "organization_id", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(db,"audit_logs", "organization_id", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(db,"alert_events", "organization_id", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(db,"ar_receipt_lines", "organization_id", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(db,"ap_payment_lines", "organization_id", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(db,"webhook_endpoints", "organization_id", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(db,"webhook_deliveries", "organization_id", "INTEGER NOT NULL DEFAULT 1");
+  ensureColumn(db,"purchase_order_items", "received_qty", "REAL NOT NULL DEFAULT 0");
+  ensureColumn(db,"sales_order_items", "delivered_qty", "REAL NOT NULL DEFAULT 0");
 
   // Make code/sku unique per organization (SQLite requires table rebuild to remove old UNIQUE(code/sku))
   // Keep ids stable to avoid breaking foreign keys.
-  rebuildPartnerTable({ table: "customers", codeColumn: "code" });
-  rebuildPartnerTable({ table: "suppliers", codeColumn: "code" });
-  rebuildProductsTable();
-  rebuildArInvoicesTable();
+  rebuildPartnerTable(db, { table: "customers", codeColumn: "code" });
+  rebuildPartnerTable(db, { table: "suppliers", codeColumn: "code" });
+  rebuildProductsTable(db);
+  rebuildArInvoicesTable(db);
 
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_stock_ledger_product ON stock_ledger(product_id);

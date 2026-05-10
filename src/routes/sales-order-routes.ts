@@ -6,17 +6,9 @@ import { writeAuditLog } from "../services/audit";
 import { bodyHash, loadIdempotency, saveIdempotency } from "../services/idempotency";
 import { assertEntityExists, actionPermission, canTransitionOrder } from "../services/order-helpers";
 import { makeArInvoiceNo } from "../services/ar-invoice-no";
+import { paginateInMemory } from "../utils/pagination";
 
 export function registerSalesOrderRoutes(app: Express): void {
-  const maybePaginate = <T>(req: { query: Record<string, unknown> }, rows: T[]) => {
-    const pageSize = Math.max(1, Math.min(200, Number(req.query.pageSize || 0)));
-    const page = Math.max(1, Number(req.query.page || 1));
-    if (!(pageSize > 0)) return rows;
-    const total = rows.length;
-    const start = (page - 1) * pageSize;
-    return { rows: rows.slice(start, start + pageSize), total, page, pageSize };
-  };
-
   app.post("/api/sales-orders", auth, requirePermission("sales:write"), (req, res, next) => {
     const parsed = salesOrderSchema.safeParse(req.body);
     if (!parsed.success) return next(parsed.error);
@@ -161,7 +153,7 @@ export function registerSalesOrderRoutes(app: Express): void {
       }
       return true;
     });
-    res.json(maybePaginate(req, filtered));
+    res.json(paginateInMemory(req, filtered, { maxPageSize: 200 }));
   });
 
   app.get("/api/sales-orders/:id", auth, requirePermission("sales:read"), (req, res, next) => {

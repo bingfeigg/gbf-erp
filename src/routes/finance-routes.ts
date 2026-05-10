@@ -4,19 +4,10 @@ import { auth, requirePermission, getOrgId } from "../middleware/auth";
 import { receiptSchema, paymentSchema } from "../schemas/api";
 import { makeEntryNo, createJournalEntry } from "../services/journal";
 import { writeAuditLog } from "../services/audit";
+import { paginateInMemory } from "../utils/pagination";
 import { bodyHash, loadIdempotency, saveIdempotency } from "../services/idempotency";
 
 export function registerFinanceRoutes(app: Express): void {
-  const maybePaginate = <T>(req: { query: Record<string, unknown> }, rows: T[]) => {
-    const rawPageSize = Number(req.query.pageSize);
-    if (!Number.isFinite(rawPageSize) || rawPageSize <= 0) return rows;
-    const pageSize = Math.max(1, Math.min(200, rawPageSize));
-    const page = Math.max(1, Number(req.query.page || 1));
-    const total = rows.length;
-    const start = (page - 1) * pageSize;
-    return { rows: rows.slice(start, start + pageSize), total, page, pageSize };
-  };
-
   app.get("/api/finance/accounts", auth, requirePermission("purchase:read"), (_req, res) => {
     const rows = db.prepare("SELECT id, code, name, type FROM accounts ORDER BY code").all();
     res.json(rows);
@@ -81,7 +72,7 @@ export function registerFinanceRoutes(app: Express): void {
       }
       return { ...row, fulfillmentStatus };
     });
-    res.json(maybePaginate(_req, rowsWithFulfillment));
+    res.json(paginateInMemory(_req, rowsWithFulfillment, { maxPageSize: 200, optIn: true }));
   });
 
   app.get("/api/ap/bills", auth, requirePermission("purchase:read"), (_req, res) => {
@@ -121,7 +112,7 @@ export function registerFinanceRoutes(app: Express): void {
       }
       return { ...row, fulfillmentStatus };
     });
-    res.json(maybePaginate(_req, rowsWithFulfillment));
+    res.json(paginateInMemory(_req, rowsWithFulfillment, { maxPageSize: 200, optIn: true }));
   });
 
   app.post("/api/finance/receipts", auth, requirePermission("sales:write"), (req, res, next) => {
