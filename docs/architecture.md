@@ -6,7 +6,7 @@
 
 | 文件 | 作用 |
 |------|------|
-| [`public/index.html`](../public/index.html) | 页面结构与样式；底部按顺序引用下列脚本。 |
+| [`public/index.html`](../public/index.html) | 页面结构与样式；底部按顺序引用脚本。注意 Express 将 `public` 挂在 **`/app`**，故 `public/app/foo.js` 的 URL 为 **`/app/app/foo.js`**（勿写成 `/app/foo.js`，否则会 404）。 |
 | [`public/app/state-dom.js`](../public/app/state-dom.js) | 全局 `state`、缓存、`document` 引用、`panels`、版本行首屏请求等。 |
 | [`public/app/format.js`](../public/app/format.js) | 日期短格式、金额两位小数、`escapeHtml` 等纯展示函数。 |
 | [`public/app/table.js`](../public/app/table.js) | `renderTable`、`textMatch` / `textMatchEx`（依赖 `format`）。 |

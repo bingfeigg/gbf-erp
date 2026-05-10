@@ -2315,11 +2315,11 @@
       </section>
     </div>
 
-    <!-- 控制台脚本按依赖顺序加载：状态/DOM → 格式化 → 表格 → 文案映射 → 业务主逻辑 -->
-    <script src="/app/state-dom.js"></script>
-    <script src="/app/format.js"></script>
-    <script src="/app/table.js"></script>
-    <script src="/app/i18n-zh.js"></script>
+    <!-- 静态挂载在 /app，文件在 public/ 下：分块脚本在 public/app/ → URL 为 /app/app/*.js -->
+    <script src="/app/app/state-dom.js"></script>
+    <script src="/app/app/format.js"></script>
+    <script src="/app/app/table.js"></script>
+    <script src="/app/app/i18n-zh.js"></script>
     <script src="/app/app.js"></script>
     <div id="actionToast" class="action-toast" role="status" aria-live="polite"></div>
   </body>
