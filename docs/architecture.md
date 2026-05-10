@@ -2,6 +2,19 @@
 
 本文描述仓库「服务端」主体目录职责与请求链路，便于阅读代码或扩展接口。前端静态资源位于仓库根目录 [`public/`](../public/)，契约文档位于 [`openapi/`](../openapi/)。
 
+### 控制台脚本（`public/`）
+
+| 文件 | 作用 |
+|------|------|
+| [`public/index.html`](../public/index.html) | 页面结构与样式；底部按顺序引用下列脚本。 |
+| [`public/app/state-dom.js`](../public/app/state-dom.js) | 全局 `state`、缓存、`document` 引用、`panels`、版本行首屏请求等。 |
+| [`public/app/format.js`](../public/app/format.js) | 日期短格式、金额两位小数、`escapeHtml` 等纯展示函数。 |
+| [`public/app/table.js`](../public/app/table.js) | `renderTable`、`textMatch` / `textMatchEx`（依赖 `format`）。 |
+| [`public/app/i18n-zh.js`](../public/app/i18n-zh.js) | 状态/角色等中文映射、`pickZh`、审批单元格与驳回摘要辅助函数。 |
+| [`public/app.js`](../public/app.js) | 其余业务：接口封装、面板切换、审批与执行、事件绑定等。 |
+
+新增控制台逻辑时：能放进无依赖纯函数的优先放 `format.js`；与表格渲染相关的放 `table.js`；仅文案映射放 `i18n-zh.js`；需要 `state` / `api` 的保留在 `app.js`，并注意脚本顺序。
+
 ## 技术栈与运行时
 
 | 类别 | 选型 |
@@ -81,7 +94,7 @@ src/
 
 | 路径 | 职责 |
 |------|------|
-| [`public/`](../public/) | 浏览器控制台（`index.html`、`app.js`），挂载在 `/app` |
+| [`public/`](../public/) | 浏览器控制台（`index.html`、`public/app/*.js` 与 `public/app.js`），挂载在 `/app` |
 | [`openapi/openapi.yaml`](../openapi/openapi.yaml) | HTTP API 契约（与实现人工对齐，见 README） |
 | [`scripts/`](../scripts/) | Bash：验证、冒烟、备份、部署辅助等 |
 | [`deploy/`](../deploy/) | systemd、logrotate 等运维片段 |

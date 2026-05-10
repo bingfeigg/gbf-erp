@@ -33,7 +33,7 @@ npm run dev
 
 ## Web 控制台（`/app`）
 
-静态页面与脚本位于仓库根目录 `public/`（`index.html`、`app.js`），由服务端挂载到 `/app`。
+静态页面与脚本位于仓库根目录 `public/`（`index.html` 与 `public/app/` 下分文件脚本 + `app.js` 主逻辑），由服务端挂载到 `/app`。
 
 - 浏览器打开 `http://localhost:3100/app`（与 `PORT` 一致即可）。
 - **导航**：左侧按「创建 / 执行 / 审批与资金 / 分析与治理」分组；采购执行、销售执行有独立入口；商品创建与单据创建已拆分面板。

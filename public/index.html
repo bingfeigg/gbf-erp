@@ -2315,6 +2315,11 @@
       </section>
     </div>
 
+    <!-- 控制台脚本按依赖顺序加载：状态/DOM → 格式化 → 表格 → 文案映射 → 业务主逻辑 -->
+    <script src="/app/state-dom.js"></script>
+    <script src="/app/format.js"></script>
+    <script src="/app/table.js"></script>
+    <script src="/app/i18n-zh.js"></script>
     <script src="/app/app.js"></script>
     <div id="actionToast" class="action-toast" role="status" aria-live="polite"></div>
   </body>

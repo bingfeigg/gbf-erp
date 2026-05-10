@@ -9,6 +9,7 @@
 - 新增服务端代码架构说明文档 [`docs/architecture.md`](architecture.md)。
 - 抽取统一内存分页工具 [`src/utils/pagination.ts`](../src/utils/pagination.ts)，财务应收/应付列表保持「仅带 pageSize 才分页」行为。
 - 将 SQLite 表重建类辅助函数迁至 [`src/db/schema-evolution.ts`](../src/db/schema-evolution.ts)，缩减 [`src/db.ts`](../src/db.ts) 职责。
+- 控制台前端拆分为 `public/app/` 下多脚本（`state-dom.js`、`format.js`、`table.js`、`i18n-zh.js`）+ `public/app.js` 主逻辑，`index.html` 按依赖顺序加载。
 
 ## 0.2.0 - 2026-04-24
 
