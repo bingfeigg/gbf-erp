@@ -20,6 +20,18 @@ export function hasPermission(user: { role: RoleName }, permission: string): boo
   return perms.includes("*") || perms.includes(permission);
 }
 
+/** 非生产环境下是否允许用 `x-username` 模拟登录（Bearer 始终优先）。 */
+function devHeaderAuthEnabled(): boolean {
+  if (process.env.NODE_ENV === "production") return false;
+  const raw = process.env.ALLOW_DEV_HEADER_AUTH;
+  if (raw !== undefined && String(raw).trim() !== "") {
+    const v = String(raw).trim().toLowerCase();
+    if (v === "0" || v === "false" || v === "no" || v === "off") return false;
+    if (v === "1" || v === "true" || v === "yes" || v === "on") return true;
+  }
+  return process.env.NODE_ENV === "development";
+}
+
 export type AuthenticatedRequest = Request & {
   user?: { id: number; username: string; role: RoleName; organizationId: number };
 };
@@ -58,6 +70,10 @@ export function auth(req: Request, _res: Response, next: NextFunction) {
 
   if (process.env.NODE_ENV === "production") {
     return next(new Error("Missing auth token"));
+  }
+
+  if (!devHeaderAuthEnabled()) {
+    return next(new Error("Missing auth token (set ALLOW_DEV_HEADER_AUTH=1 to use x-username in non-production)"));
   }
 
   const username = req.header("x-username");

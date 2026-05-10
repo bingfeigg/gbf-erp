@@ -5,6 +5,12 @@ import { purchaseOrderSchema, orderActionSchema } from "../schemas/api";
 import { writeAuditLog } from "../services/audit";
 import { bodyHash, loadIdempotency, saveIdempotency } from "../services/idempotency";
 import { assertEntityExists, actionPermission, canTransitionOrder } from "../services/order-helpers";
+import {
+  attachPurchaseOrderPaymentFields,
+  fetchPurchaseOrderListRows,
+  filterPurchaseOrderList,
+  type OrderListFilters
+} from "../services/order-list-queries";
 import { paginateInMemory } from "../utils/pagination";
 
 export function registerPurchaseOrderRoutes(app: Express): void {
@@ -51,100 +57,15 @@ export function registerPurchaseOrderRoutes(app: Express): void {
 
   app.get("/api/purchase-orders", auth, requirePermission("purchase:read"), (req, res) => {
     const orgId = getOrgId(req);
-    const q = String(req.query.q ?? "").trim().toLowerCase();
-    const status = String(req.query.status ?? "all").trim().toLowerCase();
-    const stage = String(req.query.stage ?? "all").trim();
-    const actionableOnly = String(req.query.actionableOnly ?? "0") === "1";
-    const rows = db
-      .prepare(
-        `
-      SELECT
-        po.id,
-        po.order_no as orderNo,
-        po.supplier_id as supplierId,
-        po.status,
-        po.total_amount as totalAmount,
-        COALESCE(SUM(poi.qty), 0) as totalQty,
-        COALESCE(SUM(poi.received_qty), 0) as receivedQty,
-        COALESCE(SUM(poi.qty - poi.received_qty), 0) as remainingQty,
-        po.created_at as createdAt,
-        po.submitted_at as submittedAt,
-        po.approved_at as approvedAt,
-        po.rejected_at as rejectedAt,
-        po.voided_at as voidedAt,
-        po.approved_by as approvedBy
-      FROM purchase_orders po
-      LEFT JOIN purchase_order_items poi ON poi.order_id = po.id
-      WHERE po.organization_id = ?
-      GROUP BY po.id
-      ORDER BY po.id DESC
-      `
-      )
-      .all(orgId) as Array<{
-      id: number;
-      status: string;
-      totalAmount: number;
-      totalQty: number;
-      receivedQty: number;
-      remainingQty: number;
-    }>;
-    const rowsWithPayment = rows.map((row) => {
-      let paymentStatus: "no_bill" | "unpaid" | "partial_paid" | "paid" = "no_bill";
-      let billOpenAmount = 0;
-      const bill = db
-        .prepare(
-          `
-          SELECT total_amount as totalAmount, paid_amount as paidAmount
-          FROM ap_bills
-          WHERE organization_id = ? AND ref_type = 'purchase_order' AND ref_id = ?
-          ORDER BY id DESC
-          LIMIT 1
-          `
-        )
-        .get(orgId, row.id) as { totalAmount: number; paidAmount: number } | undefined;
-      if (bill) {
-        const total = Number(bill.totalAmount || 0);
-        const paid = Number(bill.paidAmount || 0);
-        billOpenAmount = Math.max(0, total - paid);
-        if (paid <= 0.0001) paymentStatus = "unpaid";
-        else if (paid + 0.0001 >= total) paymentStatus = "paid";
-        else paymentStatus = "partial_paid";
-      }
-      return { ...row, paymentStatus, billOpenAmount };
-    });
-    const stageKey = (r: any) => {
-      const st = String(r.status || "").toLowerCase();
-      if (st !== "approved") return "other";
-      const total = Number(r.totalQty || 0);
-      const done = Number(r.receivedQty || 0);
-      const f = total <= 0 || done <= 0 ? "none" : done + 0.0001 >= total ? "full" : "partial";
-      const settlement = String(r.paymentStatus || "");
-      if (f === "none" && (settlement === "unpaid" || settlement === "no_bill")) return "todo";
-      if (f === "partial") return "doing";
-      if (f === "full" && (settlement === "unpaid" || settlement === "no_bill")) return "wait_settle";
-      if (f === "full" && settlement === "partial_paid") return "settling";
-      if (f === "full" && settlement === "paid") return "done";
-      return "abnormal";
+    const filters: OrderListFilters = {
+      q: String(req.query.q ?? "").trim().toLowerCase(),
+      status: String(req.query.status ?? "all").trim().toLowerCase(),
+      stage: String(req.query.stage ?? "all").trim(),
+      actionableOnly: String(req.query.actionableOnly ?? "0") === "1"
     };
-    const filtered = rowsWithPayment.filter((r: any) => {
-      if (q) {
-        const hay = `${r.id || ""} ${r.orderNo || ""}`.toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-      const st = String(r.status || "").toLowerCase();
-      if (status !== "all" && st !== status) return false;
-      if (actionableOnly) {
-        const canSubmit = hasPermission((req as any).user, "purchase:submit");
-        const canApprove = hasPermission((req as any).user, "purchase:approve");
-        if (st === "draft" && !canSubmit) return false;
-        if (st === "submitted" && !canApprove) return false;
-        if (st !== "draft" && st !== "submitted") return false;
-      }
-      if (stage !== "all") {
-        if (stageKey(r) !== stage) return false;
-      }
-      return true;
-    });
+    const user = (req as AuthenticatedRequest).user!;
+    const rows = attachPurchaseOrderPaymentFields(orgId, fetchPurchaseOrderListRows(orgId));
+    const filtered = filterPurchaseOrderList(rows, filters, user);
     res.json(paginateInMemory(req, filtered, { maxPageSize: 200 }));
   });
 

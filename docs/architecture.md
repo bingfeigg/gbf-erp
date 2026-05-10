@@ -7,13 +7,25 @@
 | 文件 | 作用 |
 |------|------|
 | [`public/index.html`](../public/index.html) | 页面结构与样式；底部按顺序引用脚本。注意 Express 将 `public` 挂在 **`/app`**，故 `public/app/foo.js` 的 URL 为 **`/app/app/foo.js`**（勿写成 `/app/foo.js`，否则会 404）。 |
-| [`public/app/state-dom.js`](../public/app/state-dom.js) | 全局 `state`、缓存、`document` 引用、`panels`、版本行首屏请求等。 |
+| [`public/app/state-dom.js`](../public/app/state-dom.js) | 全局 `state`、缓存、`document` 引用、`panels`、版本行首屏请求、`log`、会话持久化、`showAction*` 等。 |
 | [`public/app/format.js`](../public/app/format.js) | 日期短格式、金额两位小数、`escapeHtml` 等纯展示函数。 |
 | [`public/app/table.js`](../public/app/table.js) | `renderTable`、`textMatch` / `textMatchEx`（依赖 `format`）。 |
-| [`public/app/i18n-zh.js`](../public/app/i18n-zh.js) | 状态/角色等中文映射、`pickZh`、审批单元格与驳回摘要辅助函数。 |
-| [`public/app.js`](../public/app.js) | 其余业务：接口封装、面板切换、审批与执行、事件绑定等。 |
+| [`public/app/i18n-zh.js`](../public/app/i18n-zh.js) | 状态/角色等中文映射、`pickZh`、审批单元格与驳回摘要；应收/应付阶段键与 `stageBadgeHtml` 等。 |
+| [`public/app/detail-views.js`](../public/app/detail-views.js) | 侧栏/抽屉纯展示：采购销售单详情 HTML、商品与应收应付摘要、凭证明细 HTML。 |
+| [`public/app/api-client.js`](../public/app/api-client.js) | `ensureToken`、`api`（Bearer）、`hasPermission`、`normalizePagedRows`。 |
+| [`public/app/reminders.js`](../public/app/reminders.js) | 催收货/催发货列表与加载。 |
+| [`public/app/finance-tables.js`](../public/app/finance-tables.js) | 应收、应付、凭证、审计、告警等表格的查询与渲染。 |
+| [`public/app/order-execution.js`](../public/app/order-execution.js) | 采购/销售执行区：刷新订单与仓库库位、快捷选单、数量校验、收发货与退货 API 调用。 |
+| [`public/app/doc-settlement.js`](../public/app/doc-settlement.js) | 单据创建（采购/销售）、收款/付款、主数据下拉与应收应付未结下拉、`syncTxnFormDefaults` 与相关预览/提示。 |
+| [`public/app/approval-workspace.js`](../public/app/approval-workspace.js) | 审批列表/详情/时间轴、批量动作、从审批跳转执行与资金区、`jumpFromApprovalDetail`。 |
+| [`public/app.js`](../public/app.js) | 编排入口：登录与定时刷新、主数据 CRUD、表格与事件绑定等（与上表模块通过全局函数协作；单据创建与收付款逻辑见 `doc-settlement.js`）。 |
 
-新增控制台逻辑时：能放进无依赖纯函数的优先放 `format.js`；与表格渲染相关的放 `table.js`；仅文案映射放 `i18n-zh.js`；需要 `state` / `api` 的保留在 `app.js`，并注意脚本顺序。
+#### 拆分原则（高内聚、低耦合）
+
+- **目标**：模块内职责完整、对外依赖少且单向；**不为减行数或「一律拆文件」而拆**。
+- **适合单独成文件的信号**：边界稳定（如纯工具、HTTP 封装、单一业务域）、依赖方向清晰（例如不反向依赖 `app.js`）、单文件已明显妨碍阅读或测试。
+- **宁可保留在 `app.js` 的情况**：与页面事件绑定强交织、频繁与十几处 DOM 交互、拆后只剩薄封装或形成循环依赖风险的逻辑。
+- **新增代码时**：优先落在已有高内聚模块；若只是 `app.js` 里多几十行且无新边界，不必新开脚本。脚本顺序见 `index.html`（例如 `order-execution.js` → `doc-settlement.js` → `approval-workspace.js` → `app.js`：执行区先于收付下拉；`doc-settlement` 先于审批以便跳转资金区时函数已就绪；`app.js` 最后以提供 `inputText` / `selectNum` / `sortByIdDesc` 等被 `doc-settlement` 运行期调用的符号）。
 
 ## 技术栈与运行时
 
@@ -34,8 +46,9 @@
 src/
 ├── index.ts              # 进程入口：Express、静态目录、定时任务
 ├── migrate.ts            # 迁移 CLI（npm run migrate）
-├── db.ts                 # SQLite 连接、`initDb` 中建表/索引/种子数据等
+├── db.ts                 # SQLite 连接、`initDb`（执行初始 DDL、演进、种子用户等）
 ├── db/
+│   ├── initial-ddl.ts    # 首次建表与索引的 SQL 常量（由 `initDb` 执行）
 │   └── schema-evolution.ts  # 表结构演进（按组织唯一约束等重建辅助函数）
 ├── utils/
 │   └── pagination.ts     # 内存分页（与路由中原先各文件内联逻辑一致）
@@ -67,10 +80,12 @@ src/
 └── services/             # 可复用领域逻辑（与路由解耦）
     ├── order-helpers.ts  # 订单状态机、审批通过后的库存/凭证侧效应等
     ├── journal.ts
+    ├── fulfillment.ts      # 采购收货、销售发货、采购/销售退货（库存台账 + 凭证）
     ├── audit.ts
     ├── idempotency.ts
     ├── auth-login-attempts.ts
     ├── ar-invoice-no.ts
+    ├── order-list-queries.ts  # 采购/销售订单列表查询、结算字段附加与筛选
     └── alert-webhook-runtime.ts  # 超时扫描、Webhook 队列处理（由 index 定时调用）
 ```
 
@@ -88,7 +103,7 @@ src/
 
 ### 开发环境认证说明
 
-生产环境要求携带合法 JWT。非生产环境下，`auth` 中间件在未提供 Bearer 时，可读取 `x-username` 模拟用户（便于本地调试）；**切勿在生产依赖该行为**。
+生产环境要求携带合法 JWT。非生产环境下，未提供 Bearer 时是否允许用请求头 `x-username` 模拟用户由环境变量 **`ALLOW_DEV_HEADER_AUTH`** 控制（`1`/`true` 等为开启，`0`/`false` 等为关闭）；若未设置且 `NODE_ENV=development`，默认开启以便本地调试。其它非生产值（如测试）默认关闭。**切勿在生产依赖 Header 模拟登录**。
 
 ## 与仓库其它部分的边界
 

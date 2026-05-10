@@ -6,6 +6,12 @@ import { writeAuditLog } from "../services/audit";
 import { bodyHash, loadIdempotency, saveIdempotency } from "../services/idempotency";
 import { assertEntityExists, actionPermission, canTransitionOrder } from "../services/order-helpers";
 import { makeArInvoiceNo } from "../services/ar-invoice-no";
+import {
+  attachSalesOrderReceiptFields,
+  fetchSalesOrderListRows,
+  filterSalesOrderList,
+  type OrderListFilters
+} from "../services/order-list-queries";
 import { paginateInMemory } from "../utils/pagination";
 
 export function registerSalesOrderRoutes(app: Express): void {
@@ -59,100 +65,15 @@ export function registerSalesOrderRoutes(app: Express): void {
 
   app.get("/api/sales-orders", auth, requirePermission("sales:read"), (req, res) => {
     const orgId = getOrgId(req);
-    const q = String(req.query.q ?? "").trim().toLowerCase();
-    const status = String(req.query.status ?? "all").trim().toLowerCase();
-    const stage = String(req.query.stage ?? "all").trim();
-    const actionableOnly = String(req.query.actionableOnly ?? "0") === "1";
-    const rows = db
-      .prepare(
-        `
-      SELECT
-        so.id,
-        so.order_no as orderNo,
-        so.customer_id as customerId,
-        so.status,
-        so.total_amount as totalAmount,
-        COALESCE(SUM(soi.qty), 0) as totalQty,
-        COALESCE(SUM(soi.delivered_qty), 0) as deliveredQty,
-        COALESCE(SUM(soi.qty - soi.delivered_qty), 0) as remainingQty,
-        so.created_at as createdAt,
-        so.submitted_at as submittedAt,
-        so.approved_at as approvedAt,
-        so.rejected_at as rejectedAt,
-        so.voided_at as voidedAt,
-        so.approved_by as approvedBy
-      FROM sales_orders so
-      LEFT JOIN sales_order_items soi ON soi.order_id = so.id
-      WHERE so.organization_id = ?
-      GROUP BY so.id
-      ORDER BY so.id DESC
-      `
-      )
-      .all(orgId) as Array<{
-      id: number;
-      status: string;
-      totalAmount: number;
-      totalQty: number;
-      deliveredQty: number;
-      remainingQty: number;
-    }>;
-    const rowsWithReceipt = rows.map((row) => {
-      let receiptStatus: "no_invoice" | "unreceived" | "partial_received" | "received" = "no_invoice";
-      let invoiceOpenAmount = 0;
-      const invoice = db
-        .prepare(
-          `
-          SELECT total_amount as totalAmount, received_amount as receivedAmount
-          FROM ar_invoices
-          WHERE organization_id = ? AND ref_type = 'sales_order' AND ref_id = ?
-          ORDER BY id DESC
-          LIMIT 1
-          `
-        )
-        .get(orgId, row.id) as { totalAmount: number; receivedAmount: number } | undefined;
-      if (invoice) {
-        const total = Number(invoice.totalAmount || 0);
-        const received = Number(invoice.receivedAmount || 0);
-        invoiceOpenAmount = Math.max(0, total - received);
-        if (received <= 0.0001) receiptStatus = "unreceived";
-        else if (received + 0.0001 >= total) receiptStatus = "received";
-        else receiptStatus = "partial_received";
-      }
-      return { ...row, receiptStatus, invoiceOpenAmount };
-    });
-    const stageKey = (r: any) => {
-      const st = String(r.status || "").toLowerCase();
-      if (st !== "approved") return "other";
-      const total = Number(r.totalQty || 0);
-      const done = Number(r.deliveredQty || 0);
-      const f = total <= 0 || done <= 0 ? "none" : done + 0.0001 >= total ? "full" : "partial";
-      const settlement = String(r.receiptStatus || "");
-      if (f === "none" && (settlement === "unreceived" || settlement === "no_invoice")) return "todo";
-      if (f === "partial") return "doing";
-      if (f === "full" && (settlement === "unreceived" || settlement === "no_invoice")) return "wait_settle";
-      if (f === "full" && settlement === "partial_received") return "settling";
-      if (f === "full" && settlement === "received") return "done";
-      return "abnormal";
+    const filters: OrderListFilters = {
+      q: String(req.query.q ?? "").trim().toLowerCase(),
+      status: String(req.query.status ?? "all").trim().toLowerCase(),
+      stage: String(req.query.stage ?? "all").trim(),
+      actionableOnly: String(req.query.actionableOnly ?? "0") === "1"
     };
-    const filtered = rowsWithReceipt.filter((r: any) => {
-      if (q) {
-        const hay = `${r.id || ""} ${r.orderNo || ""}`.toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-      const st = String(r.status || "").toLowerCase();
-      if (status !== "all" && st !== status) return false;
-      if (actionableOnly) {
-        const canSubmit = hasPermission((req as any).user, "sales:submit");
-        const canApprove = hasPermission((req as any).user, "sales:approve");
-        if (st === "draft" && !canSubmit) return false;
-        if (st === "submitted" && !canApprove) return false;
-        if (st !== "draft" && st !== "submitted") return false;
-      }
-      if (stage !== "all") {
-        if (stageKey(r) !== stage) return false;
-      }
-      return true;
-    });
+    const user = (req as AuthenticatedRequest).user!;
+    const rows = attachSalesOrderReceiptFields(orgId, fetchSalesOrderListRows(orgId));
+    const filtered = filterSalesOrderList(rows, filters, user);
     res.json(paginateInMemory(req, filtered, { maxPageSize: 200 }));
   });
 

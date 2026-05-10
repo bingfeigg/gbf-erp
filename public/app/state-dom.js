@@ -279,3 +279,74 @@ const panels = {
   panelAudit: document.getElementById("panelAudit"),
   panelAlerts: document.getElementById("panelAlerts")
 };
+
+function log(title, data) {
+  const msg = `\n=== ${title} ===\n${typeof data === "string" ? data : JSON.stringify(data, null, 2)}\n`;
+  output.textContent += msg;
+  output.scrollTop = output.scrollHeight;
+}
+
+function setAuthenticatedUi(isAuthed) {
+  if (loginScreen) loginScreen.classList.toggle("hidden", isAuthed);
+  if (appShell) appShell.classList.toggle("hidden", !isAuthed);
+}
+
+function persistSession() {
+  try {
+    if (!state.token) {
+      localStorage.removeItem(STORAGE_SESSION_KEY);
+      return;
+    }
+    localStorage.setItem(
+      STORAGE_SESSION_KEY,
+      JSON.stringify({
+        token: state.token,
+        username: state.username,
+        role: state.role,
+        permissions: state.permissions,
+        canUseDevOps: state.canUseDevOps
+      })
+    );
+  } catch (_e) {
+    // ignore storage failures
+  }
+}
+
+function restoreSession() {
+  try {
+    const raw = localStorage.getItem(STORAGE_SESSION_KEY);
+    if (!raw) return false;
+    const s = JSON.parse(raw);
+    if (!s?.token) return false;
+    state.token = String(s.token || "");
+    state.username = String(s.username || "");
+    state.role = String(s.role || "");
+    state.permissions = Array.isArray(s.permissions) ? s.permissions : [];
+    state.canUseDevOps = Boolean(s.canUseDevOps);
+    return Boolean(state.token);
+  } catch (_e) {
+    return false;
+  }
+}
+
+function showActionWarn(message) {
+  if (!notificationBar) return;
+  notificationBar.textContent = `提示：${message}`;
+}
+
+function showActionOk(message) {
+  if (!notificationBar) return;
+  notificationBar.textContent = `成功：${message}`;
+}
+
+let actionToastTimer = null;
+function showActionToast(type, message) {
+  if (!actionToast) return;
+  actionToast.textContent = message;
+  actionToast.classList.remove("success", "error");
+  actionToast.classList.add(type === "success" ? "success" : "error", "show");
+  if (actionToastTimer) clearTimeout(actionToastTimer);
+  actionToastTimer = setTimeout(() => {
+    actionToast.classList.remove("show");
+  }, 3600);
+}

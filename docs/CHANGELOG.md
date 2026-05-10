@@ -4,12 +4,18 @@
 
 ## 未发布
 
-- 合并环境变量模板为单一的 `.env.example`，并删除重复的 `env.example`。
-- 将 `CHANGELOG.md` 与 `scripts/regression-smoke.md` 移至 `docs/` 目录，并新增 `docs/README.md` 索引。
-- 新增服务端代码架构说明文档 [`docs/architecture.md`](architecture.md)。
-- 抽取统一内存分页工具 [`src/utils/pagination.ts`](../src/utils/pagination.ts)，财务应收/应付列表保持「仅带 pageSize 才分页」行为。
-- 将 SQLite 表重建类辅助函数迁至 [`src/db/schema-evolution.ts`](../src/db/schema-evolution.ts)，缩减 [`src/db.ts`](../src/db.ts) 职责。
-- 控制台前端拆分为 `public/app/` 下多脚本（`state-dom.js`、`format.js`、`table.js`、`i18n-zh.js`）+ `public/app.js` 主逻辑，`index.html` 按依赖顺序加载。
+（暂无）
+
+## 0.2.2 - 2026-05-10
+
+- 履约（采购收货、销售发货、采购/销售退货）的事务与库存分录迁至 [`src/services/fulfillment.ts`](../src/services/fulfillment.ts)，[`fulfillment-routes.ts`](../src/routes/fulfillment-routes.ts) 仅编排校验、幂等与审计。
+- 控制台「单据创建 + 收付款 + 应收应付下拉与预览」迁至 [`public/app/doc-settlement.js`](../public/app/doc-settlement.js)；`index.html` 中置于 `order-execution.js` 与 `approval-workspace.js` 之间。
+- 控制台进一步拆分：`detail-views.js`、`order-execution.js`、`approval-workspace.js`，并与既有 `api-client.js`、`finance-tables.js`、`reminders.js` 等协作；`architecture.md` 补充高内聚、低耦合拆分说明。
+- 首次建表与索引 SQL 抽至 [`src/db/initial-ddl.ts`](../src/db/initial-ddl.ts)；采购/销售订单列表查询与筛选迁至 [`src/services/order-list-queries.ts`](../src/services/order-list-queries.ts)。
+- 非生产环境 **`ALLOW_DEV_HEADER_AUTH`** 控制是否允许 `x-username` 模拟登录（Bearer 仍优先）；`.env.example` 已说明。
+- 控制台 `api-client.js`：`POST /api/auth/login` 返回 401 时不再误判为「会话过期」；错误响应非 JSON 时降级展示，避免整段 `api` 失败。
+- 修复 `public/app.js` 误入审批 curl 片段导致脚本解析失败、登录按钮无绑定；登录表单增加「登录中…」提示，登录按钮使用 `type="button"`。
+- 修复 `public/app/detail-views.js` 中 `renderJournalDetailHtml` 未闭合导致的脚本语法错误。
 
 ## 0.2.0 - 2026-04-24
 

@@ -144,3 +144,150 @@ function formatRejectSummaryCell(row) {
 function approvalRowKey(orderType, id) {
   return `${orderType}:${Number(id)}`;
 }
+
+function zhArApStatus(s) {
+  return pickZh(AR_AP_STATUS_ZH, s);
+}
+
+function zhOrderType(s) {
+  return pickZh(ORDER_TYPE_ZH, s);
+}
+
+function zhRole(s) {
+  return pickZh(ROLE_ZH, s);
+}
+
+function zhAlertLevel(s) {
+  return pickZh(ALERT_LEVEL_ZH, s);
+}
+
+function zhApprovalAction(s) {
+  return pickZh(APPROVAL_ACTION_ZH, s);
+}
+
+function zhJournalRefType(s) {
+  return pickZh(JOURNAL_REF_ZH, s);
+}
+
+function zhEventType(s) {
+  return pickZh(EVENT_TYPE_ZH, s);
+}
+
+function zhArFulfillmentStatus(s) {
+  const map = {
+    not_shipped: "未发货",
+    partially_shipped: "部分发货",
+    fully_shipped: "已发货",
+    unknown: "未知"
+  };
+  return map[s] || String(s || "未知");
+}
+
+function zhApFulfillmentStatus(s) {
+  const map = {
+    not_received: "未收货",
+    partially_received: "部分收货",
+    fully_received: "已收货",
+    unknown: "未知"
+  };
+  return map[s] || String(s || "未知");
+}
+
+function zhPaymentStatus(s) {
+  const map = {
+    no_bill: "未生成应付",
+    unpaid: "未付款",
+    partial_paid: "部分付款",
+    paid: "已付款"
+  };
+  return map[s] || String(s || "未知");
+}
+
+function zhReceiptStatus(s) {
+  const map = {
+    no_invoice: "未生成应收",
+    unreceived: "未收款",
+    partial_received: "部分收款",
+    received: "已收款"
+  };
+  return map[s] || String(s || "未知");
+}
+
+function fulfillmentStatusFromQty(totalQty, doneQty) {
+  const total = Number(totalQty || 0);
+  const done = Number(doneQty || 0);
+  if (total <= 0 || done <= 0) return "none";
+  if (done + 0.0001 >= total) return "full";
+  return "partial";
+}
+
+function combinedStageLabel(args) {
+  const { approvalStatus, fulfillment, settlement, kind } = args;
+  const st = String(approvalStatus || "").toLowerCase();
+  if (st && st !== "approved") return zhOrderStatus(st);
+
+  const f = String(fulfillment || "none");
+  const s = String(settlement || "unpaid");
+
+  if (f === "none" && (s === "unpaid" || s === "unreceived")) return "待执行";
+  if (f === "partial") return "执行中";
+  if (f === "full" && (s === "unpaid" || s === "unreceived")) return "已执行待结算";
+  if (f === "full" && (s === "partial_paid" || s === "partial_received")) return "结算中";
+  if (f === "full" && (s === "paid" || s === "received")) return "已完成";
+  return kind === "sales" ? "异常（未发已收）" : "异常（未收已付）";
+}
+
+function stageBadgeHtml(label) {
+  const text = String(label || "");
+  const title = text.includes("（") && text.includes("）") ? text : text;
+  let cls = "badge badge-muted";
+  if (text === "待执行") cls = "badge badge-muted";
+  else if (text === "执行中") cls = "badge badge-info";
+  else if (text === "已执行待结算") cls = "badge badge-warn";
+  else if (text === "结算中") cls = "badge badge-warn";
+  else if (text === "已完成") cls = "badge badge-ok";
+  else if (text.startsWith("异常")) cls = "badge badge-danger";
+  return `<span class="${cls}" title="${escapeHtml(title)}">${escapeHtml(text)}</span>`;
+}
+
+function arStageKeyFromRow(r) {
+  const f = String(r.fulfillmentStatus || "unknown");
+  const total = Number(r.totalAmount || 0);
+  const settled = Number(r.receivedAmount || 0);
+  const isUnsettled = settled <= 0.0001;
+  const isSettled = total > 0 && settled + 0.0001 >= total;
+  const isPartiallySettled = settled > 0.0001 && settled + 0.0001 < total;
+  if (f === "not_shipped" && isUnsettled) return "todo";
+  if (f === "partially_shipped") return "doing";
+  if (f === "fully_shipped" && isUnsettled) return "wait_settle";
+  if (f === "fully_shipped" && isPartiallySettled) return "settling";
+  if (f === "fully_shipped" && isSettled) return "done";
+  if ((f === "not_shipped" || f === "partially_shipped") && (isSettled || isPartiallySettled)) return "abnormal";
+  return "other";
+}
+
+function apStageKeyFromRow(r) {
+  const f = String(r.fulfillmentStatus || "unknown");
+  const total = Number(r.totalAmount || 0);
+  const settled = Number(r.paidAmount || 0);
+  const isUnsettled = settled <= 0.0001;
+  const isSettled = total > 0 && settled + 0.0001 >= total;
+  const isPartiallySettled = settled > 0.0001 && settled + 0.0001 < total;
+  if (f === "not_received" && isUnsettled) return "todo";
+  if (f === "partially_received") return "doing";
+  if (f === "fully_received" && isUnsettled) return "wait_settle";
+  if (f === "fully_received" && isPartiallySettled) return "settling";
+  if (f === "fully_received" && isSettled) return "done";
+  if ((f === "not_received" || f === "partially_received") && (isSettled || isPartiallySettled)) return "abnormal";
+  return "other";
+}
+
+function stageLabelFromKey(key, kind) {
+  if (key === "todo") return "待执行";
+  if (key === "doing") return "执行中";
+  if (key === "wait_settle") return "已执行待结算";
+  if (key === "settling") return "结算中";
+  if (key === "done") return "已完成";
+  if (key === "abnormal") return kind === "sales" ? "异常（未发已收）" : "异常（未收已付）";
+  return "未知";
+}

@@ -1,12 +1,12 @@
 openapi: 3.0.3
 info:
   title: GBF ERP API
-  version: "0.2.0"
+  version: "0.2.2"
   description: |
     通用贸易 MVP 后端 HTTP 接口（**精简说明**）。完整行为以 `src/routes` 与 Zod schema 为准。
 
     - 成功响应多为 `application/json`；错误体由全局错误处理统一包装。
-    - 鉴权：除 `/health`、`/api/auth/login`、`/api/auth/refresh`（及开发态 `x-username`）外，一般需 `Authorization: Bearer <access_token>`。
+    - 鉴权：除 `/health`、`/api/auth/login`、`/api/auth/refresh` 外，一般需 `Authorization: Bearer <access_token>`。非生产且开启 `ALLOW_DEV_HEADER_AUTH` 时可用 `x-username` 代替 Bearer（见 `.env.example`）。
 
 servers:
   - url: http://localhost:3100
