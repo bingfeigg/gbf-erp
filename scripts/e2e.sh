@@ -79,8 +79,17 @@ if [[ -z "$AP_G_ID" ]]; then
   echo "[e2e] AP bill missing for reverse guard"
   exit 1
 fi
-curl -s -X POST "$BASE_URL/api/finance/payments" -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d "{\"paymentNo\":\"PY-GUARD-$(date +%s)-$RANDOM\",\"supplierId\":$SUPPLIER_ID,\"apBillId\":$AP_G_ID,\"amount\":1}" >/dev/null
+# 付款接口要求采购单已收满货，否则付款失败且本段会误报「冲销应失败」
+echo "[e2e] purchase receipt (full qty before AP payment)"
+curl -s -X POST "$BASE_URL/api/purchase-orders/$PO_G_ID/receipts" -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d "{\"items\":[{\"productId\":$PRODUCT_ID,\"qty\":2}]}" | node -e "const j=JSON.parse(require('fs').readFileSync(0,'utf8')); if(!j.id) { console.error(j); process.exit(1); }"
+PY_GUARD_HTTP=$(curl -s -o /tmp/py-guard.json -w "%{http_code}" -X POST "$BASE_URL/api/finance/payments" -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d "{\"paymentNo\":\"PY-GUARD-$(date +%s)-$RANDOM\",\"supplierId\":$SUPPLIER_ID,\"apBillId\":$AP_G_ID,\"amount\":1}")
+if [[ "$PY_GUARD_HTTP" != "201" ]]; then
+  echo "[e2e] purchase guard payment expected 201, got $PY_GUARD_HTTP"
+  cat /tmp/py-guard.json
+  exit 1
+fi
 PO_REV_HTTP=$(curl -s -o /tmp/po-rev.json -w "%{http_code}" -X POST "$BASE_URL/api/purchase-orders/$PO_G_ID/action" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"action":"reverse","comment":"should fail"}')
 if [[ "$PO_REV_HTTP" != "400" ]]; then

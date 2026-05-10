@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: GBF ERP API
-  version: "0.2.2"
+  version: "0.2.3"
   description: |
     通用贸易 MVP 后端 HTTP 接口（**精简说明**）。完整行为以 `src/routes` 与 Zod schema 为准。
 

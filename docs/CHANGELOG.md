@@ -4,15 +4,19 @@
 
 ## 未发布
 
-- 文档：**新增 [`docs/license.md`](./license.md)**（离线许可证环境变量、签发/导入、`deployment.id`、数据文件与 Docker）；更新 [`README.md`](./README.md)、[`architecture.md`](./architecture.md)、[`regression-smoke.md`](./regression-smoke.md) 与仓库根 **[README](../README.md)** 索引。
-- OpenAPI：补充 **`/api/license/status`**、**`POST /api/license/install`**、**`POST /api/license/install-bootstrap`** 及 schemas；描述许可证闸 **402** 与匿名 `/api/license/status` 的公网暴露注意。
-- 许可证：**保存成功后**清除页面上的 JSON 文本框与已选文件，避免在控制台长期展示原文；**单实例绑定**：`DATA_DIR/deployment.id` 在首次初始化时生成 UUID，`GET /api/license/status` 返回 `installationId`；若许可证 `payload.deploymentId` 已填写则须与本机一致，否则校验失败（不填则不限实例）。
-- 控制台「导航中心」新增 **工具 → 许可证**，主区打开 `panelLicense`；原侧栏折叠「许可证」已移除以避免入口隐蔽。
-- 浏览器版许可证签发可视化工具：[`tools/license-maker/`](../tools/license-maker/)，本地运行 `npm run license:maker` 或 `bash tools/license-maker/serve.sh` 后访问 `http://127.0.0.1:5175`（私钥仅在本地参与签名）。
-- **离线许可证**：配置 `LICENSE_PUBLIC_KEY_FILE`（或 `LICENSE_PUBLIC_KEY`）后对 Ed25519 签名许可证启用校验；默认许可证路径为 `DATA_DIR/license.json`。可选 **`LICENSE_PUBLIC_KEY_REQUIRED=1`**：未配置公钥时进程拒绝启动。登录页提供「许可证未就绪」粘贴区，接口 **`POST /api/license/install-bootstrap`**（管理员账号密码 + 许可证全文）可在首次登录前写入；登录后许可证仍无效时弹出全屏提示（管理员可继续粘贴）。签发密钥：`npm run license:keys` / `npm run license:sign`。未配置公钥时不启用校验（兼容开发）。
-- **许可证试用期**：已配置公钥但尚无有效正式许可证时，自动写入 `DATA_DIR/trial.json` 并开始 **`LICENSE_TRIAL_DAYS`（默认 7 天）** 试用；试用期内接口放行，过期后需导入许可证。导入成功后清除 `trial.json`。控制台「切换账号」旁展示试用期或正式许可证剩余天数。
-- **试用倒计时（未配置公钥）**：未设置 `LICENSE_PUBLIC_KEY_FILE` 时同样写入/读取 `trial.json`，在控制台「切换账号」旁显示试用剩余天数（仅提示，不拦截接口）；便于交付前尚未部署公钥的环境也能看到倒计时。
-- 移除将项目根目录 `./erp.db` 复制到 `DATA_DIR` 的兼容逻辑；数据库仅以 **`DATA_DIR/erp.db`** 为准（见 [`src/db.ts`](../src/db.ts)）。
+（暂无）
+
+## 0.2.3 - 2026-05-11
+
+- **E2E**：`scripts/e2e.sh`「采购冲销在结算后应失败」在付款前补 **`POST /api/purchase-orders/:id/receipts` 全额收货**，与「未收满货禁止付款」一致，并断言付款 **201**，修复 `npm run verify` 误报。
+- **工具链**：`npm run test` / `openapi:validate` 使用 **`./node_modules/.bin/tsx`** 与 **`./node_modules/.bin/swagger-cli`**，避免 `npx --no-install`/`find -exec` 与 PATH 问题导致单测或 OpenAPI 校验失败。
+- **版本**：`package.json`、`openapi.yaml` **`0.2.3`**。
+- OpenAPI：**`/api/license/*`**、`402` / 匿名 `status` 说明； **`info.version`** 与发布同步。
+- **离线许可证**（Ed25519）：`LICENSE_PUBLIC_KEY_FILE` / `LICENSE_TRIAL_DAYS` / `LICENSE_PUBLIC_KEY_REQUIRED`；`GET /api/license/status`、`install`、**`install-bootstrap`**；全局 **402** 门控（`src/middleware/license-gate.ts`）；**单实例**：`DATA_DIR/deployment.id` ↔ payload `deploymentId`；控制台 **工具 → 许可证**、`license-panel.js`、粘贴后清空、**402** → `gbf-license-blocked`。
+- **`tools/license-maker/`**、`npm run license:keys|sign|maker`；**Dockerfile** 多阶段运行镜像不含 `src/`。
+- 商品创建：SKU/名称「已有商品」建议、提交前防重名、表单 **`autocomplete="off"`**。
+- 文档：[**`docs/license.md`**](./license.md) 与 **`architecture.md` / `regression-smoke.md` / 根 README** 索引更新。
+- 移除将 `./erp.db` 从项目根迁入 `DATA_DIR` 的旧兼容；库文件仅以 **`DATA_DIR/erp.db`** 为准。
 
 ## 0.2.2 - 2026-05-10
 
