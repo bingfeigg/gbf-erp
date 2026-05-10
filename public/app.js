@@ -10,7 +10,8 @@ const panelTitles = {
   panelJournals: "凭证中心",
   panelTrend: "趋势图表",
   panelAudit: "审计日志",
-  panelAlerts: "告警事件"
+  panelAlerts: "告警事件",
+  panelLicense: "许可证"
 };
 const ROLE_ALIAS = {
   root: "admin"
@@ -547,6 +548,7 @@ function applyRoleUi() {
     ["navTrend", "stock:read"],
     ["navAudit", "*"],
     ["navAlerts", "*"],
+    ["navLicense", "*"],
     ["btnBizPurchase", "purchase:write"],
     ["btnBizSales", "sales:write"],
     ["btnBizAddProduct", ["stock:write", "product:write"]],
@@ -617,7 +619,8 @@ function applyRoleUi() {
     ["navJournals", "purchase:read"],
     ["navTrend", "stock:read"],
     ["navAudit", "*"],
-    ["navAlerts", "*"]
+    ["navAlerts", "*"],
+    ["navLicense", "*"]
   ];
   navVisibleByPerm.forEach(([id, perm]) => {
     const el = document.getElementById(id);
@@ -773,6 +776,9 @@ async function login() {
   setAuthenticatedUi(true);
   persistSession();
   applyRoleUi();
+  if (typeof window.refreshLicenseBannerAndPanel === "function") {
+    await window.refreshLicenseBannerAndPanel();
+  }
   jumpToRoleDefaultPanel();
   syncTxnFormDefaults();
   await refreshPartyPicks();
@@ -833,6 +839,48 @@ async function queryProducts() {
   log("商品列表", rows);
 }
 
+async function showExistingProductsDropdown(mode) {
+  ensureToken();
+  const skuEl = document.getElementById("newProductSku");
+  const nameEl = document.getElementById("newProductName");
+  const anchorInput = mode === "sku" ? skuEl : nameEl;
+  const q = String(anchorInput?.value || "").trim().toLowerCase();
+  if (whSuggestBox) {
+    whSuggestBox.classList.remove("show");
+    whSuggestBox.innerHTML = "";
+  }
+  if (locSuggestBox) {
+    locSuggestBox.classList.remove("show");
+    locSuggestBox.innerHTML = "";
+  }
+  const rows = await api("/api/products");
+  cache.products = rows;
+  let filtered = rows || [];
+  if (q) {
+    filtered = filtered.filter((p) => {
+      const sku = String(p.sku || "").toLowerCase();
+      const name = String(p.name || "").toLowerCase();
+      if (mode === "sku") return sku.includes(q) || name.includes(q);
+      return name.includes(q) || sku.includes(q);
+    });
+  }
+  const items = filtered.slice(0, 20).map((p) => ({
+    primary: `${p.sku || "-"}  ${p.name || "-"}`,
+    secondary: `ID:${p.id}`
+  }));
+  const qDisp = escapeHtml(q);
+  const title =
+    mode === "sku"
+      ? q
+        ? `已有商品（SKU/名称含「${qDisp}」）`
+        : "已有商品（避免 SKU 重复）"
+      : q
+        ? `已有商品（名称/SKU 含「${qDisp}」）`
+        : "已有商品（避免名称重复）";
+  if (!productSuggestBox) return;
+  showWhLocSuggest(productSuggestBox, title, items);
+}
+
 async function addProductFromForm() {
   ensureToken();
   const sku = document.getElementById("newProductSku").value.trim();
@@ -841,6 +889,19 @@ async function addProductFromForm() {
   const costPrice = Number(document.getElementById("newProductCost").value);
   const salePrice = Number(document.getElementById("newProductSale").value);
   if (sku.length < 2 || name.length < 2) throw new Error("SKU 与名称至少 2 个字符。");
+  let existing = cache.products;
+  if (!Array.isArray(existing) || existing.length === 0) {
+    existing = await api("/api/products");
+    cache.products = existing;
+  }
+  const skuLc = sku.toLowerCase();
+  const nameLc = name.toLowerCase();
+  if (existing.some((p) => String(p.sku || "").trim().toLowerCase() === skuLc)) {
+    throw new Error("SKU 与已有商品重复，请修改或从列表选用。");
+  }
+  if (existing.some((p) => String(p.name || "").trim().toLowerCase() === nameLc)) {
+    throw new Error("商品名称与已有商品重复，请修改。");
+  }
   if (!Number.isFinite(costPrice) || costPrice < 0) throw new Error("请填写有效的成本价（≥0）。");
   if (!Number.isFinite(salePrice) || salePrice < 0) throw new Error("请填写有效的销售价（≥0）。");
   const created = await api("/api/products", {
@@ -1063,6 +1124,9 @@ function setActivePanel(panelId) {
   syncBizParamsHint(panelId);
   if ((panelId === "panelPurchaseExec" || panelId === "panelSalesExec") && state.token) {
     void refreshExecutionPicks().catch(() => {});
+  }
+  if (panelId === "panelLicense" && typeof window.refreshLicenseBannerAndPanel === "function") {
+    void window.refreshLicenseBannerAndPanel();
   }
 }
 
@@ -1890,6 +1954,34 @@ document.getElementById("execSalesQty")?.addEventListener("input", () => {
   void validateExecutionQty("sales");
 });
 
+// 商品创建：聚焦 SKU/名称时提示已有商品，避免重复（分列防抖，避免两框切换时 mode 错乱）
+let productSuggestInputTimerSku = null;
+let productSuggestInputTimerName = null;
+["newProductSku", "newProductName"].forEach((id) => {
+  const mode = id === "newProductSku" ? "sku" : "name";
+  document.getElementById(id)?.addEventListener("focus", () => {
+    const el = document.getElementById(id);
+    if (el) showExistingProductsDropdown(mode).catch(() => {});
+  });
+  document.getElementById(id)?.addEventListener("click", () => {
+    const el = document.getElementById(id);
+    if (el) showExistingProductsDropdown(mode).catch(() => {});
+  });
+  document.getElementById(id)?.addEventListener("input", () => {
+    if (mode === "sku") {
+      clearTimeout(productSuggestInputTimerSku);
+      productSuggestInputTimerSku = setTimeout(() => {
+        showExistingProductsDropdown("sku").catch(() => {});
+      }, 280);
+    } else {
+      clearTimeout(productSuggestInputTimerName);
+      productSuggestInputTimerName = setTimeout(() => {
+        showExistingProductsDropdown("name").catch(() => {});
+      }, 280);
+    }
+  });
+});
+
 // 仓库/库位管理：聚焦输入框时提示已有项，避免重复创建
 ["newWarehouseCode", "newWarehouseName"].forEach((id) => {
   document.getElementById(id)?.addEventListener("focus", () => {
@@ -1918,13 +2010,22 @@ document.getElementById("newLocationWarehousePick")?.addEventListener("change", 
 
 // 点击空白处收起下拉提示
 document.addEventListener("click", (e) => {
-  if (!whSuggestBox && !locSuggestBox) return;
+  if (!whSuggestBox && !locSuggestBox && !productSuggestBox) return;
   const target = e.target;
-  const ids = new Set(["newWarehouseCode", "newWarehouseName", "newLocationWarehousePick", "newLocationCode", "newLocationName"]);
+  const ids = new Set([
+    "newWarehouseCode",
+    "newWarehouseName",
+    "newLocationWarehousePick",
+    "newLocationCode",
+    "newLocationName",
+    "newProductSku",
+    "newProductName"
+  ]);
   const isInput = target && target.id && ids.has(target.id);
   const inWh = whSuggestBox ? whSuggestBox.contains(target) : false;
   const inLoc = locSuggestBox ? locSuggestBox.contains(target) : false;
-  if (!isInput && !inWh && !inLoc) hideWhLocSuggest();
+  const inProduct = productSuggestBox ? productSuggestBox.contains(target) : false;
+  if (!isInput && !inWh && !inLoc && !inProduct) hideWhLocSuggest();
 });
 
 tabButtons.forEach((btn) => {
@@ -2009,4 +2110,7 @@ if (restoreSession()) {
 } else {
   setAuthenticatedUi(false);
   applyRoleUi();
+}
+if (typeof window.refreshLicenseBannerAndPanel === "function") {
+  void window.refreshLicenseBannerAndPanel();
 }

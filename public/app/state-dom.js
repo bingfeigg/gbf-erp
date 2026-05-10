@@ -41,6 +41,7 @@ const actionToast = document.getElementById("actionToast");
 const appVersionInline = document.getElementById("appVersionInline");
 const whSuggestBox = document.getElementById("whSuggestBox");
 const locSuggestBox = document.getElementById("locSuggestBox");
+const productSuggestBox = document.getElementById("productSuggestBox");
 const approvalSlaCards = document.getElementById("approvalSlaCards");
 const approvalOverdueTable = document.getElementById("approvalOverdueTable");
 const approvalTimeline = document.getElementById("approvalTimeline");
@@ -277,7 +278,8 @@ const panels = {
   panelJournals: document.getElementById("panelJournals"),
   panelTrend: document.getElementById("panelTrend"),
   panelAudit: document.getElementById("panelAudit"),
-  panelAlerts: document.getElementById("panelAlerts")
+  panelAlerts: document.getElementById("panelAlerts"),
+  panelLicense: document.getElementById("panelLicense")
 };
 
 function log(title, data) {

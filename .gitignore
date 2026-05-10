@@ -24,6 +24,7 @@ pnpm-debug.log*
 *.db-shm
 *.db-wal
 data/
+license-keys/
 backups/
 dr-reports/
 

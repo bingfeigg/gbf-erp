@@ -6,7 +6,8 @@ info:
     通用贸易 MVP 后端 HTTP 接口（**精简说明**）。完整行为以 `src/routes` 与 Zod schema 为准。
 
     - 成功响应多为 `application/json`；错误体由全局错误处理统一包装。
-    - 鉴权：除 `/health`、`/api/auth/login`、`/api/auth/refresh` 外，一般需 `Authorization: Bearer <access_token>`。非生产且开启 `ALLOW_DEV_HEADER_AUTH` 时可用 `x-username` 代替 Bearer（见 `.env.example`）。
+    - 鉴权：除 `/health`、`/api/auth/login`、`/api/auth/refresh`、`/api/license/status`、`POST /api/license/install-bootstrap` 外，一般需 `Authorization: Bearer <access_token>`。非生产且开启 `ALLOW_DEV_HEADER_AUTH` 时可用 `x-username` 代替 Bearer（见 `.env.example`）。
+    - **许可证闸**：配置验签公钥且当前无有效许可证（且非试用放行）时，其它需鉴权类接口可能返回 **402** `{ message, code: "LICENSE_INVALID" }`（详见 `src/middleware/license-gate.ts` 豁免列表）。
 
 servers:
   - url: http://localhost:3100
@@ -21,6 +22,7 @@ tags:
   - name: approvals
   - name: config
   - name: audit
+  - name: license
 
 paths:
   /health:
@@ -103,6 +105,67 @@ paths:
       responses:
         "200":
           description: OK
+
+  /api/license/status:
+    get:
+      tags: [license]
+      summary: 许可证与试用状态（无需登录）
+      description: |
+        供登录页与控制横幅使用。返回 `installationId`（本机部署 UUID）、`enforcement` / `valid`、试用期与到期提示等（ exact 字段以运行时代码为准）。
+        **公网部署注意**：未鉴权即可读取上述元数据，建议网络层限制访问或对应该路径单独限速。
+      security: []
+      responses:
+        "200":
+          description: 状态 JSON（结构随 enforcement / valid / 试用变化）
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LicenseStatusResponse" }
+
+  /api/license/install-bootstrap:
+    post:
+      tags: [license]
+      summary: 首次写入许可证（管理员用户名密码 + 许可证正文，无需 Bearer）
+      description: |
+        仅在已配置验签公钥且当前许可证无效或缺失时使用；与登录接口共用登录失败计数等防护。成功响应含 `ok` 与最新 `status`。
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LicenseBootstrapBody" }
+      responses:
+        "200":
+          description: "{ ok: true, status: … }"
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        "400":
+          description: 当前未启用公钥校验、或许可证已有效等
+        "401":
+          description: 用户名或密码错误
+        "403":
+          description: 非 admin 账号
+
+  /api/license/install:
+    post:
+      tags: [license]
+      summary: 安装或更新许可证（需管理员 JWT）
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LicenseInstallBody" }
+      responses:
+        "200":
+          description: "{ ok: true, status: … }"
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        "400":
+          description: JSON 无效或许可证校验失败
+        "403":
+          description: 非 admin
 
   /api/suppliers:
     get:
@@ -412,6 +475,32 @@ components:
       schema: { type: integer, minimum: 1 }
 
   schemas:
+    LicenseStatusResponse:
+      type: object
+      additionalProperties: true
+      description: |
+        `enforcement: false` 时通常含 `valid`、`installationId`、`trialUiActive` 等；
+        `enforcement: true` 时常含 `reason`、`expiresAt`、`trialActive`、`daysRemaining` 等。以 `src/license.ts` 中 `LicenseStatusResponse` 为准。
+
+    LicenseInstallBody:
+      type: object
+      required: [licenseJson]
+      properties:
+        licenseJson:
+          type: string
+          minLength: 10
+          description: 与磁盘 `license.json` 一致的完整 JSON 字符串
+
+    LicenseBootstrapBody:
+      type: object
+      required: [username, password, licenseJson]
+      properties:
+        username: { type: string, minLength: 1 }
+        password: { type: string, minLength: 1 }
+        licenseJson:
+          type: string
+          minLength: 10
+
     LoginBody:
       type: object
       required: [username, password]

@@ -69,6 +69,25 @@
         justify-content: space-between;
         gap: 10px;
       }
+      .hero-head-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-shrink: 0;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+      #licenseExpiryReminder {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-sub);
+        max-width: min(420px, 52vw);
+        text-align: right;
+        line-height: 1.35;
+      }
+      #licenseExpiryReminder.warn {
+        color: var(--warn);
+      }
       .hero-head h1 {
         margin: 0;
       }
@@ -1468,6 +1487,55 @@
         color: #dbe7ff;
         font-size: 12px;
       }
+      .notif.license-warn {
+        background: rgba(184, 134, 11, 0.14);
+        border-color: rgba(255, 200, 100, 0.35);
+      }
+      .notif.license-err {
+        background: rgba(192, 57, 43, 0.16);
+        border-color: rgba(255, 120, 100, 0.4);
+      }
+      .login-license-card {
+        margin-top: 18px;
+        padding: 14px 16px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 200, 100, 0.35);
+        background: rgba(184, 134, 11, 0.1);
+        max-width: 520px;
+        width: 100%;
+      }
+      .login-license-card h3 {
+        margin: 0 0 8px;
+        font-size: 1rem;
+      }
+      .license-gate-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 3000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        background: rgba(4, 8, 18, 0.92);
+      }
+      .license-gate-modal.hidden {
+        display: none;
+      }
+      .license-gate-dialog {
+        width: 100%;
+        max-width: 540px;
+        max-height: min(90vh, 720px);
+        overflow: auto;
+        padding: 20px 20px 16px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: var(--glass);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+      }
+      .license-gate-dialog h2 {
+        margin: 0 0 8px;
+        font-size: 1.1rem;
+      }
       .action-toast {
         position: fixed;
         left: 50%;
@@ -1700,6 +1768,25 @@
           <button type="button" id="btnLogin">登录系统</button>
         </div>
         <div id="loginFormStatus" class="muted" style="margin-top:8px;">默认账号：admin / admin</div>
+        <div id="loginLicenseHint" class="muted hidden" style="margin-top:12px;max-width:420px;line-height:1.5;"></div>
+        <section id="loginLicenseCard" class="login-license-card hidden" aria-label="许可证输入">
+          <h3>许可证未就绪</h3>
+          <p class="muted" style="margin:0 0 10px;line-height:1.5;">
+            可<strong>粘贴</strong>签发方提供的整段 <strong>license.json</strong>，或使用「选择 license 文件」从本机载入；确认已填写<strong>管理员</strong>账号与密码后点「保存许可证」。保存成功后再点「登录系统」。
+          </p>
+          <input id="licenseFileBootstrap" type="file" accept=".json,application/json,text/plain" class="hidden" tabindex="-1" aria-hidden="true" />
+          <textarea
+            id="licensePasteBootstrap"
+            rows="9"
+            style="width:100%;font-family:ui-monospace,monospace;font-size:12px;"
+            placeholder='{"payload":{...},"signature":"..."}'
+          ></textarea>
+          <div class="row license-import-actions" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;">
+            <button type="button" id="btnLicensePickBootstrap" class="secondary">选择 license 文件…</button>
+            <button type="button" id="btnLicenseBootstrap" class="secondary">保存许可证</button>
+          </div>
+          <div id="licenseBootstrapFeedback" class="muted" style="margin-top:8px;"></div>
+        </section>
       </section>
     </div>
 
@@ -1707,10 +1794,14 @@
       <div class="hero">
         <div class="hero-head">
           <h1>GBF ERP 智能控制台<span id="appVersionInline" class="version-inline hidden" title="版本信息加载中">v-</span></h1>
-          <button class="secondary" id="btnSwitchAccount">切换账号</button>
+          <div class="hero-head-actions">
+            <span id="licenseExpiryReminder" class="hidden" aria-live="polite"></span>
+            <button class="secondary" type="button" id="btnSwitchAccount">切换账号</button>
+          </div>
         </div>
         <p><small>采购、销售、库存与应收应付、记账凭证联动呈现；实时看板纵览经营与资金。</small></p>
         <div class="notif" id="notificationBar">通知：暂无新消息</div>
+        <div id="licenseBanner" class="notif license-err hidden" role="status"></div>
         <div id="loginStatus" class="hidden">未登录</div>
       </div>
 
@@ -1761,6 +1852,10 @@
                     <button id="navAudit" data-panel="panelAudit">审计日志</button>
                     <button id="navAlerts" data-panel="panelAlerts">告警事件</button>
                   </div>
+                  <div class="module-nav-group">
+                    <div class="module-nav-group-title">工具</div>
+                    <button id="navLicense" type="button" data-panel="panelLicense">许可证</button>
+                  </div>
                 </div>
               </div>
             </details>
@@ -1805,13 +1900,14 @@
               <section class="card" style="margin-top:8px;">
                 <h3 class="section-title">商品创建</h3>
                 <div class="row create-form-grid" style="margin-top:6px;align-items:flex-end;">
-                  <input id="newProductSku" class="w-130" placeholder="SKU（≥2字）" />
-                  <input id="newProductName" class="minw-140" placeholder="名称（≥2字）" />
-                  <input id="newProductUnit" class="w-90" placeholder="单位" />
-                  <input id="newProductCost" class="w-100" type="number" step="0.01" min="0" placeholder="成本价" />
-                  <input id="newProductSale" class="w-100" type="number" step="0.01" min="0" placeholder="销售价" />
+                  <input id="newProductSku" class="w-130" placeholder="SKU（≥2字）" autocomplete="off" />
+                  <input id="newProductName" class="minw-140" placeholder="名称（≥2字）" autocomplete="off" />
+                  <input id="newProductUnit" class="w-90" placeholder="单位" autocomplete="off" />
+                  <input id="newProductCost" class="w-100" type="number" step="0.01" min="0" placeholder="成本价" autocomplete="off" />
+                  <input id="newProductSale" class="w-100" type="number" step="0.01" min="0" placeholder="销售价" autocomplete="off" />
                   <button id="btnProductAdd" type="button">新增商品</button>
                 </div>
+                <div id="productSuggestBox" class="suggest-popover" role="listbox" aria-label="已有商品列表"></div>
               </section>
               <section class="card" id="sectionWarehouseLocation" style="margin-top:8px;">
                 <h3 class="section-title">仓库 & 库位管理</h3>
@@ -2300,6 +2396,30 @@
               <div id="alertsTable" class="table-wrap"></div>
               <div class="pager" id="pagerAlerts"></div>
             </section>
+
+            <section class="panel" id="panelLicense">
+              <section class="card">
+                <h3 class="section-title">许可证</h3>
+                <div id="licensePanelHint" class="muted" style="margin-bottom:12px;line-height:1.55;">加载中…</div>
+                <p class="muted" style="margin:0 0 10px;font-size:13px;line-height:1.5;">
+                  本机部署 ID（提供给签发方写入许可证 <code>deploymentId</code> 字段，即可绑定仅此实例；签发时不填则不限实例）：
+                  <code id="licenseInstallationId" style="word-break:break-all;font-size:12px;">—</code>
+                </p>
+                <input id="licenseFilePanel" type="file" accept=".json,application/json,text/plain" class="hidden" tabindex="-1" aria-hidden="true" />
+                <textarea
+                  id="licensePasteArea"
+                  class="hidden"
+                  rows="10"
+                  style="width:100%;font-family:ui-monospace,monospace;font-size:12px;"
+                  placeholder="粘贴 license.json 全文，或使用下方「选择 license 文件」（仅管理员可操作保存）"
+                ></textarea>
+                <div class="row license-import-actions" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;">
+                  <button type="button" id="btnLicensePickPanel" class="secondary hidden">选择 license 文件…</button>
+                  <button type="button" id="btnLicenseInstall" class="secondary hidden">保存许可证</button>
+                </div>
+                <div id="licenseInstallFeedback" class="muted" style="margin-top:8px;"></div>
+              </section>
+            </section>
           </section>
         </main>
       </div>
@@ -2321,7 +2441,35 @@
     <script src="/app/app/table.js"></script>
     <script src="/app/app/i18n-zh.js"></script>
     <script src="/app/app/detail-views.js"></script>
+    <div id="licenseGateModal" class="license-gate-modal hidden" role="dialog" aria-modal="true" aria-labelledby="licenseGateModalTitle">
+      <div class="license-gate-dialog">
+        <h2 id="licenseGateModalTitle">需要有效许可证</h2>
+        <p id="licenseGateModalReason" class="muted" style="margin:0 0 10px;line-height:1.5;"></p>
+        <div id="licenseGateModalAdmin" class="hidden">
+          <input id="licenseFileModal" type="file" accept=".json,application/json,text/plain" class="hidden" tabindex="-1" aria-hidden="true" />
+          <textarea
+            id="licensePasteModal"
+            rows="9"
+            style="width:100%;font-family:ui-monospace,monospace;font-size:12px;margin-bottom:8px;"
+            placeholder="粘贴 license.json 全文，或使用「选择 license 文件」"
+          ></textarea>
+          <div class="row license-import-actions" style="display:flex;flex-wrap:wrap;gap:8px;">
+            <button type="button" class="secondary" id="btnLicensePickModal">选择 license 文件…</button>
+            <button type="button" id="btnLicenseInstallModal">保存许可证</button>
+          </div>
+          <div id="licenseModalFeedback" class="muted" style="margin-top:8px;"></div>
+        </div>
+        <div id="licenseGateModalNonAdmin" class="hidden">
+          <p class="warn" style="margin:0 0 12px;">当前登录账号不是管理员，无法在此粘贴许可证。请联系贵司管理员处理，或切换账号。</p>
+          <div class="row">
+            <button type="button" class="secondary" id="btnLicenseModalSwitch">切换账号</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <script src="/app/app/api-client.js"></script>
+    <script src="/app/app/license-panel.js"></script>
     <script src="/app/app/reminders.js"></script>
     <script src="/app/app/finance-tables.js"></script>
     <script src="/app/app/order-execution.js"></script>

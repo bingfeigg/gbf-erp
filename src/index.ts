@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import path from "path";
 import { initDb } from "./db";
+import { loadLicensePublicKey } from "./license";
 import { APPROVAL_SCAN_INTERVAL_MS, WEBHOOK_DELIVERY_INTERVAL_MS } from "./constants";
 import { registerAppRoutes } from "./routes/register-app";
 import { registerErrorHandler } from "./middleware/error-handler";
@@ -13,6 +14,13 @@ app.use(express.json());
 app.use("/app", express.static(path.join(process.cwd(), "public"), { index: false, redirect: false }));
 
 initDb();
+
+function isTruthyEnv(name: string): boolean {
+  const raw = process.env[name];
+  if (raw === undefined || String(raw).trim() === "") return false;
+  const v = String(raw).trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes" || v === "on";
+}
 
 function validateRuntimeConfig() {
   const portRaw = process.env.PORT ?? "3100";
@@ -28,6 +36,12 @@ function validateRuntimeConfig() {
           "(e.g. run `openssl rand -hex 32` and export the result). See .env.example in the project root."
       );
     }
+  }
+  if (isTruthyEnv("LICENSE_PUBLIC_KEY_REQUIRED") && !loadLicensePublicKey()) {
+    throw new Error(
+      "已设置 LICENSE_PUBLIC_KEY_REQUIRED，但未找到有效许可证公钥。请在环境中配置 LICENSE_PUBLIC_KEY_FILE " +
+        "或 LICENSE_PUBLIC_KEY（Ed25519 PEM），否则进程无法启动。"
+    );
   }
 }
 

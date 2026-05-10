@@ -108,3 +108,11 @@ export function requireAnyPermission(...permissions: string[]) {
     return next(new Error(`Forbidden: need one of ${permissions.join(", ")}`));
   };
 }
+
+/** 管理员专用；Forbidden 文案须以 `Forbidden` 开头以便 error-handler 映射为 HTTP 403。 */
+export function requireAdmin(req: Request, _res: Response, next: NextFunction) {
+  const user = (req as AuthenticatedRequest).user;
+  if (!user) return next(new Error("Unauthorized"));
+  if (user.role !== "admin") return next(new Error("Forbidden: admin only"));
+  next();
+}

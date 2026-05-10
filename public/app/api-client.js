@@ -30,6 +30,14 @@ function api(path, options = {}) {
     }
     if (!res.ok) {
       const rawMessage = String(body.message || `HTTP ${res.status}`);
+      if (res.status === 402) {
+        try {
+          window.dispatchEvent(new CustomEvent("gbf-license-blocked", { detail: body }));
+        } catch (_e) {
+          /* ignore */
+        }
+        throw new Error(rawMessage);
+      }
       const method = String(options.method || "GET").toUpperCase();
       const pathOnly = String(path).split("?")[0];
       // 登录失败也是 401，不能当作「已有会话过期」，否则看不到真实错误提示。

@@ -102,10 +102,13 @@ const AUDIT_ACTION_ZH = {
   "supplier.create": "创建供应商",
   "product.create": "创建商品",
   "warehouse.create": "创建仓库",
-  "location.create": "创建库位"
+  "location.create": "创建库位",
+  "license.install": "安装许可证"
 };
 
 const AUDIT_DETAIL_KEY_ZH = {
+  bootstrap: "首次写入",
+  expiresAt: "到期时间",
   orderNo: "单号",
   receiptNo: "单据号",
   paymentNo: "付款单号",

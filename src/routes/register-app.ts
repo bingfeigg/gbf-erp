@@ -1,6 +1,8 @@
 import { Express } from "express";
+import { registerLicenseGate } from "../middleware/license-gate";
 import { registerPublicRoutes } from "./public";
 import { registerAuthRoutes } from "./auth-routes";
+import { registerLicenseRoutes } from "./license-routes";
 import { registerFinanceRoutes } from "./finance-routes";
 import { registerFinanceReportRoutes } from "./finance-report-routes";
 import { registerMasterRoutes } from "./master-routes";
@@ -13,8 +15,10 @@ import { registerReminderRoutes } from "./reminder-routes";
 
 /** 注册全部 HTTP 路由（顺序敏感：先公开/认证；财务核心后立即财务报表；错误处理在 index 最后挂载） */
 export function registerAppRoutes(app: Express): void {
+  registerLicenseGate(app);
   registerPublicRoutes(app);
   registerAuthRoutes(app);
+  registerLicenseRoutes(app);
   registerFinanceRoutes(app);
   registerFinanceReportRoutes(app);
   registerMasterRoutes(app);

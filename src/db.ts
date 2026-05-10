@@ -9,6 +9,7 @@ import {
   rebuildProductsTable
 } from "./db/schema-evolution";
 import { ERP_INITIAL_TABLES_DDL, ERP_INDEX_DDL } from "./db/initial-ddl";
+import { ensureDeploymentId } from "./services/deployment-id";
 
 const dataDir = path.resolve(process.cwd(), process.env.DATA_DIR ?? "data");
 const dbPath = path.join(dataDir, "erp.db");
@@ -149,6 +150,8 @@ export function initDb() {
       "INSERT OR IGNORE INTO locations (organization_id, warehouse_id, code, name) VALUES (1, ?, 'A01', 'Default Location')"
     ).run(wh.id);
   }
+
+  ensureDeploymentId();
 }
 
 export default db;

@@ -200,6 +200,10 @@ function hideWhLocSuggest() {
     locSuggestBox.classList.remove("show");
     locSuggestBox.innerHTML = "";
   }
+  if (productSuggestBox) {
+    productSuggestBox.classList.remove("show");
+    productSuggestBox.innerHTML = "";
+  }
 }
 
 function showWhLocSuggest(targetEl, title, items) {
@@ -231,6 +235,10 @@ async function showExistingWarehousesDropdown(anchorEl) {
     locSuggestBox.classList.remove("show");
     locSuggestBox.innerHTML = "";
   }
+  if (productSuggestBox) {
+    productSuggestBox.classList.remove("show");
+    productSuggestBox.innerHTML = "";
+  }
   showWhLocSuggest(whSuggestBox, "已有仓库", items);
 }
 
@@ -245,6 +253,10 @@ async function showExistingLocationsDropdown(anchorEl) {
   if (whSuggestBox) {
     whSuggestBox.classList.remove("show");
     whSuggestBox.innerHTML = "";
+  }
+  if (productSuggestBox) {
+    productSuggestBox.classList.remove("show");
+    productSuggestBox.innerHTML = "";
   }
   showWhLocSuggest(locSuggestBox, warehouseId > 0 ? `已有库位（仓库ID:${warehouseId}）` : "已有库位", items);
 }

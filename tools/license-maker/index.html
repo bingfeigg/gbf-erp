@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GBF ERP 许可证签发工具（本地）</title>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --card: rgba(255, 255, 255, 0.06);
+        --border: rgba(255, 255, 255, 0.12);
+        --text: #e2e8f0;
+        --muted: #94a3b8;
+        --accent: #38bdf8;
+        --ok: #4ade80;
+        --danger: #f87171;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+        color: var(--text);
+        background: radial-gradient(ellipse 120% 80% at 20% -20%, #1e3a5f 0%, transparent 55%), var(--bg);
+        padding: 24px 16px 48px;
+      }
+      .wrap {
+        max-width: 720px;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 1.35rem;
+        font-weight: 700;
+        margin: 0 0 8px;
+      }
+      .sub {
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.55;
+        margin-bottom: 20px;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 18px;
+        margin-bottom: 14px;
+      }
+      .card h2 {
+        font-size: 0.92rem;
+        margin: 0 0 12px;
+        color: var(--muted);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      label {
+        display: block;
+        font-size: 13px;
+        color: var(--muted);
+        margin-bottom: 4px;
+      }
+      input[type="text"],
+      input[type="date"],
+      input[type="file"],
+      textarea {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: rgba(0, 0, 0, 0.25);
+        color: var(--text);
+        font-size: 14px;
+      }
+      textarea {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        min-height: 160px;
+        resize: vertical;
+      }
+      .row {
+        margin-bottom: 14px;
+      }
+      .row:last-child {
+        margin-bottom: 0;
+      }
+      .flex {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+      }
+      button {
+        cursor: pointer;
+        border-radius: 8px;
+        padding: 10px 18px;
+        font-size: 14px;
+        font-weight: 600;
+        border: 1px solid var(--accent);
+        background: rgba(56, 189, 248, 0.15);
+        color: var(--accent);
+      }
+      button.secondary {
+        border-color: var(--border);
+        background: transparent;
+        color: var(--muted);
+      }
+      button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .msg {
+        font-size: 13px;
+        margin-top: 10px;
+        line-height: 1.45;
+      }
+      .msg.err {
+        color: var(--danger);
+      }
+      .msg.ok {
+        color: var(--ok);
+      }
+      details {
+        margin-bottom: 16px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      details summary {
+        cursor: pointer;
+        color: var(--accent);
+      }
+      code {
+        font-size: 12px;
+        background: rgba(0, 0, 0, 0.35);
+        padding: 2px 6px;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>GBF ERP 许可证签发工具</h1>
+      <p class="sub">
+        在<strong>本地浏览器</strong>内使用您的 <strong>Ed25519 私钥 PEM</strong> 对载荷签名，生成与后端
+        <code>src/license.ts</code> 一致的 <code>license.json</code>。私钥不会上传任何服务器。推荐使用
+        <strong>Chrome / Edge 119+</strong>；若本机 Web Crypto 不支持 Ed25519，将尝试从 esm.sh 加载备用库（需短暂联网）。
+      </p>
+
+      <details open>
+        <summary>密钥从哪来？</summary>
+        <p>
+          在项目根目录执行：<code>bash scripts/gen-license-keys.sh</code>（或 <code>npm run license:keys</code>），会得到
+          <code>license_private.pem</code>（保密）与 <code>license_public.pem</code>（部署到客户环境的
+          LICENSE_PUBLIC_KEY_FILE）。
+        </p>
+        <p>
+          <strong>单实例绑定：</strong>在 ERP 控制台「工具 → 许可证」页面复制<strong>本机部署 ID</strong>，在下方「部署 / 实例 ID」填入相同值后再生成；客户把该 JSON 导入后，仅该实例可通过校验（复制整份
+          <code>data</code> 目录仍会克隆，强防需硬件方案）。
+        </p>
+      </details>
+
+      <div class="card">
+        <h2>签发参数</h2>
+        <div class="row">
+          <label for="expires">到期日（UTC 日当天 23:59:59）</label>
+          <input id="expires" type="date" required />
+        </div>
+        <div class="row">
+          <label for="customer">客户标识（可选）</label>
+          <input id="customer" type="text" placeholder="例如：Acme Corp" autocomplete="off" />
+        </div>
+        <div class="row">
+          <label for="deployment">部署 / 实例 ID（可选）</label>
+          <input id="deployment" type="text" placeholder="UUID 或其它约定标识" autocomplete="off" />
+        </div>
+        <div class="row">
+          <label for="notes">备注（可选）</label>
+          <input id="notes" type="text" placeholder="内部备忘" autocomplete="off" />
+        </div>
+        <div class="row">
+          <label for="keyFile">私钥文件（PKCS#8 PEM，未加密）</label>
+          <input id="keyFile" type="file" accept=".pem,.txt,text/plain" />
+        </div>
+        <div class="flex">
+          <button type="button" id="btnGenerate">生成 license.json</button>
+          <button type="button" class="secondary" id="btnCopy" disabled>复制全文</button>
+        </div>
+        <div id="msg" class="msg" aria-live="polite"></div>
+      </div>
+
+      <div class="card">
+        <h2>输出</h2>
+        <textarea id="out" readonly placeholder='点击「生成」后在此显示完整的 { "payload": ..., "signature": "..." }'></textarea>
+      </div>
+    </div>
+
+    <script>
+      /**
+       * 必须与服务端 src/license.ts 中 stableStringify 完全一致。
+       */
+      function stableStringify(value) {
+        if (value === undefined) {
+          return "null";
+        }
+        if (value === null || typeof value !== "object") {
+          return JSON.stringify(value);
+        }
+        if (Array.isArray(value)) {
+          return "[" + value.map(function (x) { return stableStringify(x); }).join(",") + "]";
+        }
+        var keys = Object.keys(value).filter(function (k) { return value[k] !== undefined; }).sort();
+        return "{" + keys.map(function (k) {
+          return JSON.stringify(k) + ":" + stableStringify(value[k]);
+        }).join(",") + "}";
+      }
+
+      function pemToPkcs8Buffer(pem) {
+        var m = pem.match(/-----BEGIN (?:PRIVATE|ENCRYPTED PRIVATE) KEY-----/);
+        if (pem.includes("ENCRYPTED")) {
+          throw new Error("不支持加密私钥，请使用未加密的 PEM");
+        }
+        var b64 = pem
+          .replace(/-----BEGIN PRIVATE KEY-----/g, "")
+          .replace(/-----END PRIVATE KEY-----/g, "")
+          .replace(/\s/g, "");
+        var raw = atob(b64);
+        var buf = new Uint8Array(raw.length);
+        for (var i = 0; i < raw.length; i++) buf[i] = raw.charCodeAt(i);
+        return buf;
+      }
+
+      function bufToBase64(buf) {
+        var bin = "";
+        var u8 = new Uint8Array(buf);
+        for (var i = 0; i < u8.length; i++) bin += String.fromCharCode(u8[i]);
+        return btoa(bin);
+      }
+
+      /** 从 OpenSSL 生成的 PKCS#8 DER 中提取 32 字节 Ed25519 种子（供 @noble/ed25519 回退）。 */
+      function extractEd25519SeedFromPkcs8Der(der) {
+        var oid = [0x06, 0x03, 0x2b, 0x65, 0x70];
+        var oidPos = -1;
+        for (var i = 0; i <= der.length - 5; i++) {
+          var ok = true;
+          for (var j = 0; j < 5; j++) {
+            if (der[i + j] !== oid[j]) {
+              ok = false;
+              break;
+            }
+          }
+          if (ok) {
+            oidPos = i;
+            break;
+          }
+        }
+        if (oidPos < 0) {
+          throw new Error("PKCS#8 中未找到 Ed25519 OID（请确认私钥由 openssl genpkey -algorithm ED25519 生成）");
+        }
+        for (var p = oidPos + 5; p < der.length - 34; p++) {
+          if (der[p] === 0x04 && der[p + 1] === 0x20) {
+            return der.slice(p + 2, p + 2 + 32);
+          }
+        }
+        throw new Error("无法解析 Ed25519 私钥种子");
+      }
+
+      async function generateLicenseWithNoble(pemText, payload) {
+        var der = pemToPkcs8Buffer(pemText);
+        var seed = extractEd25519SeedFromPkcs8Der(der);
+        var mod = await import("https://esm.sh/@noble/ed25519@2.1.3");
+        var canonical = stableStringify(payload);
+        var msgBytes = new TextEncoder().encode(canonical);
+        var sigBytes = await mod.sign(msgBytes, seed);
+        return {
+          payload: payload,
+          signature: bufToBase64(sigBytes),
+        };
+      }
+
+      async function generateLicense(privateKeyPem, payload) {
+        var canonical = stableStringify(payload);
+        var msgBytes = new TextEncoder().encode(canonical);
+        if (typeof crypto !== "undefined" && crypto.subtle && crypto.subtle.importKey) {
+          try {
+            var der = pemToPkcs8Buffer(privateKeyPem);
+            var key = await crypto.subtle.importKey("pkcs8", der, { name: "Ed25519" }, false, ["sign"]);
+            var sig = await crypto.subtle.sign({ name: "Ed25519" }, key, msgBytes);
+            return {
+              payload: payload,
+              signature: bufToBase64(sig),
+            };
+          } catch (_e) {
+            /* 旧版 Firefox 等不支持 WebCrypto Ed25519，改用 noble（需联网加载 esm.sh） */
+          }
+        }
+        return generateLicenseWithNoble(privateKeyPem, payload);
+      }
+
+      function setMsg(el, text, cls) {
+        el.textContent = text || "";
+        el.className = "msg " + (cls || "");
+      }
+
+      var expires = document.getElementById("expires");
+      var customer = document.getElementById("customer");
+      var deployment = document.getElementById("deployment");
+      var notes = document.getElementById("notes");
+      var keyFile = document.getElementById("keyFile");
+      var btnGenerate = document.getElementById("btnGenerate");
+      var btnCopy = document.getElementById("btnCopy");
+      var out = document.getElementById("out");
+      var msg = document.getElementById("msg");
+
+      expires.valueAsDate = new Date();
+
+      btnGenerate.addEventListener("click", async function () {
+        setMsg(msg, "");
+        btnCopy.disabled = true;
+        var expVal = expires.value;
+        if (!expVal) {
+          setMsg(msg, "请选择到期日。", "err");
+          return;
+        }
+        var expiresAt = new Date(expVal + "T23:59:59.999Z").toISOString();
+        if (!Number.isFinite(Date.parse(expiresAt))) {
+          setMsg(msg, "到期日无效。", "err");
+          return;
+        }
+        var f = keyFile.files && keyFile.files[0];
+        if (!f) {
+          setMsg(msg, "请选择私钥 PEM 文件。", "err");
+          return;
+        }
+        var pemText = await f.text();
+
+        var c = customer.value.trim();
+        var dep = deployment.value.trim();
+        var n = notes.value.trim();
+        /** @type {Record<string, unknown>} */
+        var payload = {
+          v: 1,
+          issuedAt: new Date().toISOString(),
+          expiresAt: expiresAt,
+        };
+        if (c) payload.customerId = c;
+        if (dep) payload.deploymentId = dep;
+        if (n) payload.notes = n;
+
+        try {
+          var file = await generateLicense(pemText, payload);
+          var json = JSON.stringify(file, null, 2);
+          out.value = json;
+          btnCopy.disabled = false;
+          setMsg(msg, "已生成。请将全文交给客户写入 data/license.json 或在控制台「许可证」粘贴。", "ok");
+        } catch (e) {
+          out.value = "";
+          setMsg(msg, e && e.message ? e.message : String(e), "err");
+        }
+      });
+
+      btnCopy.addEventListener("click", async function () {
+        var text = out.value.trim();
+        if (!text) return;
+        try {
+          await navigator.clipboard.writeText(text);
+          setMsg(msg, "已复制到剪贴板。", "ok");
+        } catch (_e) {
+          out.focus();
+          out.select();
+          setMsg(msg, "无法自动复制，请手动 Ctrl+C。", "err");
+        }
+      });
+    </script>
+  </body>
+</html>
